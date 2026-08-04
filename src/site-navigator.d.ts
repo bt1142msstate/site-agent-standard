@@ -42,7 +42,6 @@ export interface NavigationControllerOptions {
   observedAttributes?: string[];
 }
 
-export declare const verifiedNavigationRuntime: "esm";
 export declare function isVerifiedNavigationTargetVisible(options: FocusNavigationOptions): boolean;
 export declare function focusVerifiedNavigationTarget(options: FocusNavigationOptions): boolean;
 export declare function createVerifiedNavigationController(options: NavigationControllerOptions): {

@@ -1,5 +1,3 @@
-export const verifiedNavigationRuntime = "esm";
-
 function getParentElement(target) {
   return target?.parentElement || target?.getRootNode?.()?.host || null;
 }
