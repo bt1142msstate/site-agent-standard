@@ -30,7 +30,7 @@ in small adapters outside the engine.
 ## Install
 
 ```bash
-npm install github:bt1142msstate/site-navigator
+npm install github:bt1142msstate/site-navigator#v0.1.0
 ```
 
 The package is currently distributed from this repository. An npm release can
