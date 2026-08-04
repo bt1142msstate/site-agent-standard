@@ -6,7 +6,7 @@
   "main": "./src/site-agent.js",
   "types": "./src/site-agent.d.ts",
   "bin": {
-    "site-agent": "./bin/site-agent.js"
+    "site-agent": "bin/site-agent.js"
   },
   "exports": {
     ".": {

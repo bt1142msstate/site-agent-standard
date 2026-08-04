@@ -1,0 +1,43 @@
+name: Publish package
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Immutable release tag to publish
+        required: true
+        default: v0.4.0
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out release tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://npm.pkg.github.com
+          scope: '@bt1142msstate'
+
+      - name: Verify release
+        run: |
+          test "v$(node -p "require('./package.json').version")" = "${{ inputs.tag }}"
+          npm ci
+          npm run check
+
+      - name: Normalize npm metadata
+        run: npm pkg fix
+
+      - name: Publish
+        run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
