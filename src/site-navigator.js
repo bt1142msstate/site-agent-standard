@@ -248,9 +248,43 @@ export function focusVerifiedNavigationTarget(options = {}) {
   return true;
 }
 
-export function createVerifiedNavigationController(options = {}) {
+export const NAVIGATION_FAILURES = Object.freeze({
+  adapterRequired: "adapter-required",
+  inexactTarget: "inexact-target",
+  stateNotVerified: "state-not-verified",
+  targetNotFound: "target-not-found",
+  timedOut: "timed-out",
+});
+
+function isAdapter(value) {
+  return Boolean(value
+    && typeof value.getIntent === "function"
+    && typeof value.activate === "function"
+    && typeof value.applyState === "function"
+    && typeof value.isReady === "function"
+    && typeof value.verifyState === "function"
+    && typeof value.resolveTarget === "function");
+}
+
+function normalizeVerification(result) {
+  if (result === true) return { reason: "verified", verified: true };
+  if (result === false || result == null) {
+    return { reason: NAVIGATION_FAILURES.stateNotVerified, verified: false };
+  }
+  return {
+    reason: String(result.reason || (result.verified ? "verified" : NAVIGATION_FAILURES.stateNotVerified)),
+    verified: result.verified === true,
+  };
+}
+
+/**
+ * Coordinates semantic navigation through a required host adapter. The engine
+ * never searches the DOM for meaning and never guesses application state.
+ */
+export function createSiteNavigator(options = {}) {
   const windowRef = options.windowRef || globalThis;
   const documentRef = options.documentRef || windowRef.document;
+  const adapter = options.adapter;
   const setTimeoutRef = options.setTimeoutRef || windowRef.setTimeout?.bind(windowRef);
   const clearTimeoutRef = options.clearTimeoutRef || windowRef.clearTimeout?.bind(windowRef);
   const MutationObserverRef = options.MutationObserverRef || windowRef.MutationObserver;
@@ -262,6 +296,8 @@ export function createVerifiedNavigationController(options = {}) {
   let focusInProgress = false;
   let startedAt = 0;
   let lastFailure = "";
+  let intent = null;
+  let attemptNumber = 0;
 
   function report(state, descriptor = null) {
     options.report?.(state, descriptor);
@@ -287,12 +323,54 @@ export function createVerifiedNavigationController(options = {}) {
     }, delay) || 0;
   }
 
-  function attempt() {
+  async function attempt() {
     if (stopped || focused || focusInProgress) return;
-    options.activate?.();
-    const descriptor = options.resolve?.();
+    focusInProgress = true;
+    attemptNumber += 1;
+    const context = Object.freeze({
+      attempt: attemptNumber,
+      document: documentRef,
+      intent,
+      window: windowRef,
+    });
+    report("activating");
+    try {
+      await adapter.activate(context);
+      report("applying-state");
+      await adapter.applyState(context);
+      const ready = await adapter.isReady(context);
+      if (!ready) {
+        lastFailure = "not-ready";
+        report("waiting");
+        focusInProgress = false;
+        scheduleAttempt(100);
+        return;
+      }
+      const verification = normalizeVerification(await adapter.verifyState(context));
+      if (!verification.verified) {
+        lastFailure = verification.reason;
+        report("state-not-verified");
+        focusInProgress = false;
+        scheduleAttempt(100);
+        return;
+      }
+    } catch (error) {
+      lastFailure = String(error?.code || error?.message || "adapter-error");
+      report("adapter-error");
+      focusInProgress = false;
+      scheduleAttempt(100);
+      return;
+    }
+
+    const descriptor = await adapter.resolveTarget(context);
     if (descriptor?.target) {
-      focusInProgress = true;
+      if (descriptor.exact !== true) {
+        lastFailure = NAVIGATION_FAILURES.inexactTarget;
+        report("inexact-target", descriptor);
+        focusInProgress = false;
+        scheduleAttempt(100);
+        return;
+      }
       report("scrolling", descriptor);
       (options.focusTarget || focusVerifiedNavigationTarget)({
         ...options.focusOptions,
@@ -313,10 +391,16 @@ export function createVerifiedNavigationController(options = {}) {
           scheduleAttempt(80);
         },
       });
+    } else {
+      lastFailure = NAVIGATION_FAILURES.targetNotFound;
+      focusInProgress = false;
+      report("target-not-found");
     }
     if (focused || stopped) return;
     if (Date.now() - startedAt >= timeoutMs) {
-      report(lastFailure === "outside-visible-region" ? "not-visible" : "not-found");
+      report(lastFailure === "outside-visible-region" ? "not-visible" : NAVIGATION_FAILURES.timedOut, {
+        reason: lastFailure || NAVIGATION_FAILURES.targetNotFound,
+      });
       stop();
       return;
     }
@@ -324,7 +408,13 @@ export function createVerifiedNavigationController(options = {}) {
   }
 
   function start() {
-    if (options.hasIntent && !options.hasIntent()) return false;
+    if (!isAdapter(adapter)) {
+      lastFailure = NAVIGATION_FAILURES.adapterRequired;
+      report("failed", { reason: lastFailure });
+      return false;
+    }
+    intent = adapter.getIntent();
+    if (!intent) return false;
     startedAt = Date.now();
     report("waiting");
     if (MutationObserverRef && documentRef.body) {
@@ -336,9 +426,11 @@ export function createVerifiedNavigationController(options = {}) {
         subtree: true,
       });
     }
-    attempt();
+    void attempt();
     return true;
   }
 
   return { attempt, start, stop };
 }
+
+export const createVerifiedNavigationController = createSiteNavigator;

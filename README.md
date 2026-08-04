@@ -30,7 +30,7 @@ in small adapters outside the engine.
 ## Install
 
 ```bash
-npm install github:bt1142msstate/site-navigator#v0.1.0
+npm install github:bt1142msstate/site-navigator#v0.2.0
 ```
 
 The package is currently distributed from this repository. An npm release can
@@ -61,21 +61,31 @@ Add your own highlight style:
 
 ## Navigate through dynamic UI
 
-Use the controller when a route must open a tab, drawer, accordion, or modal
-before its exact target exists:
+Use the controller when a route must open a tab, apply filters, wait for data,
+and verify state before its exact target exists. A host adapter is required;
+there is deliberately no semantic DOM fallback:
 
 ```js
-import { createVerifiedNavigationController } from "@bt1142msstate/site-navigator";
+import { createSiteNavigator } from "@bt1142msstate/site-navigator";
 
-const controller = createVerifiedNavigationController({
-  hasIntent: () => new URLSearchParams(location.search).has("showOrder"),
-  activate: () => {
-    document.querySelector("[data-tab='orders']")?.click();
-  },
-  resolve: () => {
-    const id = new URLSearchParams(location.search).get("showOrder");
-    const target = document.querySelector(`[data-order-id='${CSS.escape(id)}']`);
-    return target ? { target, exact: true, kind: "order" } : null;
+const controller = createSiteNavigator({
+  adapter: {
+    getIntent: () => ({
+      route: "orders",
+      state: { period: "year-to-date" },
+      target: { orderReference: "opaque-order-reference" },
+    }),
+    activate: ({ intent }) => appRouter.open(intent.route),
+    applyState: ({ intent }) => orderController.setPeriod(intent.state.period),
+    isReady: () => orderController.hasLoaded(),
+    verifyState: ({ intent }) => ({
+      verified: orderController.getPeriod() === intent.state.period,
+      reason: "period-mismatch",
+    }),
+    resolveTarget: ({ intent }) => {
+      const target = orderController.resolveReference(intent.target.orderReference);
+      return target ? { target, exact: true, kind: "order" } : null;
+    },
   },
   focusOptions: { headerSelector: ".app-header" },
   report: (state, destination) => {
@@ -93,12 +103,24 @@ references.
 ## Adapter contract
 
 The engine deliberately does not know routes, business entities, permissions,
-or data stores. A host adapter owns four decisions:
+or data stores. A host adapter owns six decisions:
 
-1. `hasIntent`: whether navigation was requested.
-2. `activate`: which UI state must be opened.
-3. `resolve`: the smallest stable target currently rendered.
-4. `report`: how waiting, scrolling, retrying, focused, or failed states appear.
+1. `getIntent`: the semantic route, state, and opaque target requested.
+2. `activate`: which application view must be opened.
+3. `applyState`: which filters, ranges, tabs, or expanded records must be set.
+4. `isReady`: whether the view and its data are ready to inspect.
+5. `verifyState`: whether the requested state is actually active.
+6. `resolveTarget`: the smallest stable, exact target currently rendered.
+
+The engine will not resolve or highlight a target until state verification
+passes. It rejects missing adapters and descriptors that do not explicitly set
+`exact: true`. This prevents a year-to-date answer from opening a default
+"today" view, and prevents broad-container highlights when a field adapter is
+missing.
+
+`focusVerifiedNavigationTarget()` remains available as a low-level geometry
+primitive when the application has already resolved a trusted element. It does
+not infer semantics or search for a likely target.
 
 This boundary makes one engine reusable across applications while keeping
 authorization and data semantics in the host.

@@ -60,27 +60,33 @@ test("waits for delayed content and retries a replaced shadow target", async ({ 
   await page.evaluate(async () => {
     const host = document.querySelector("#host");
     const root = host.attachShadow({ mode: "open" });
-    const { createVerifiedNavigationController } = await import("/src/site-navigator.js");
+    const { createSiteNavigator } = await import("/src/site-navigator.js");
     let activationCount = 0;
-    createVerifiedNavigationController({
-      hasIntent: () => true,
-      activate: () => {
-        activationCount += 1;
-        if (!root.querySelector(".wanted")) {
-          root.innerHTML = `<style>.inner{width:900px;height:320px;overflow:auto}.space{width:1200px;height:700px}.wanted{width:180px;height:64px}</style><details><summary>Settings</summary><div class="inner"><div class="space"></div><button class="wanted">Original</button></div></details>`;
-          root.querySelector("details").open = true;
-          setTimeout(() => {
-            const oldTarget = root.querySelector(".wanted");
-            const replacement = oldTarget.cloneNode(true);
-            replacement.textContent = "Replacement";
-            replacement.dataset.replacement = "true";
-            oldTarget.replaceWith(replacement);
-          }, 80);
-        }
-      },
-      resolve: () => {
-        const target = root.querySelector(".wanted");
-        return target ? { target, exact: true, kind: "setting" } : null;
+    let selectedRange = "today";
+    createSiteNavigator({
+      adapter: {
+        getIntent: () => ({ state: { range: "year-to-date" }, target: { field: "total" } }),
+        activate: () => {
+          activationCount += 1;
+          if (!root.querySelector(".wanted")) {
+            root.innerHTML = `<style>.inner{width:900px;height:320px;overflow:auto}.space{width:1200px;height:700px}.wanted{width:180px;height:64px}</style><details><summary>Settings</summary><div class="inner"><div class="space"></div><button class="wanted">Original</button></div></details>`;
+            root.querySelector("details").open = true;
+            setTimeout(() => {
+              const oldTarget = root.querySelector(".wanted");
+              const replacement = oldTarget.cloneNode(true);
+              replacement.textContent = "Replacement";
+              replacement.dataset.replacement = "true";
+              oldTarget.replaceWith(replacement);
+            }, 80);
+          }
+        },
+        applyState: ({ intent }) => { selectedRange = intent.state.range; },
+        isReady: () => Boolean(root.querySelector(".wanted")),
+        verifyState: ({ intent }) => selectedRange === intent.state.range,
+        resolveTarget: () => {
+          const target = root.querySelector(".wanted");
+          return target ? { target, exact: true, kind: "setting" } : null;
+        },
       },
       focusOptions: { headerSelector: ".page-header" },
       report: (state) => document.documentElement.dataset.navigationState = state,
@@ -97,6 +103,7 @@ test("waits for delayed content and retries a replaced shadow target", async ({ 
     };
   });
   expect(evidence).toEqual({ active: true, replacement: "true", state: "visible" });
+  await expect(page.locator("html")).toHaveAttribute("data-navigation-state", "focused");
 });
 
 test("treats a full-screen top-layer dialog as its own visible viewport", async ({ page }) => {

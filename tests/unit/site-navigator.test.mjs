@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  createSiteNavigator,
   focusVerifiedNavigationTarget,
   isVerifiedNavigationTargetVisible,
 } from "../../src/site-navigator.js";
@@ -199,4 +200,105 @@ test("site navigator focus honors reduced motion", () => {
     setTimeoutRef: (callback, delay) => { if (delay === 260) callback(); },
   });
   assert.equal(behavior, "auto");
+});
+
+test("semantic navigation requires a complete host adapter", () => {
+  const reports = [];
+  const navigator = createSiteNavigator({
+    documentRef: { body: null },
+    report: (state, detail) => reports.push([state, detail]),
+    windowRef: {},
+  });
+  assert.equal(navigator.start(), false);
+  assert.equal(reports[0][0], "failed");
+  assert.equal(reports[0][1].reason, "adapter-required");
+});
+
+test("semantic navigation applies and verifies state before resolving an exact target", async () => {
+  const order = [];
+  const reports = [];
+  let settled;
+  const settledPromise = new Promise((resolve) => { settled = resolve; });
+  const target = { isConnected: true };
+  const navigator = createSiteNavigator({
+    adapter: {
+      getIntent: () => ({ route: "team-hours", state: { range: "year-to-date" } }),
+      activate: ({ intent }) => order.push(["activate", intent.route]),
+      applyState: ({ intent }) => order.push(["apply", intent.state.range]),
+      isReady: () => { order.push(["ready"]); return true; },
+      verifyState: ({ intent }) => { order.push(["verify", intent.state.range]); return true; },
+      resolveTarget: () => { order.push(["resolve"]); return { target, exact: true, kind: "pay-total" }; },
+    },
+    documentRef: { body: null },
+    focusTarget: ({ onSettled }) => {
+      order.push(["focus"]);
+      onSettled({ reason: "visible", target, visible: true });
+      return true;
+    },
+    report: (state) => {
+      reports.push(state);
+      if (state === "focused") settled();
+    },
+    windowRef: {},
+  });
+  assert.equal(navigator.start(), true);
+  await settledPromise;
+  assert.deepEqual(order.map(([step]) => step), ["activate", "apply", "ready", "verify", "resolve", "focus"]);
+  assert.equal(reports.at(-1), "focused");
+});
+
+test("semantic navigation never focuses when state verification fails", async () => {
+  const reports = [];
+  let focusCalls = 0;
+  let resolveCalls = 0;
+  const timers = [];
+  const navigator = createSiteNavigator({
+    adapter: {
+      getIntent: () => ({ state: { range: "year-to-date" } }),
+      activate: () => {},
+      applyState: () => {},
+      isReady: () => true,
+      verifyState: () => ({ verified: false, reason: "range-mismatch" }),
+      resolveTarget: () => { resolveCalls += 1; return null; },
+    },
+    documentRef: { body: null },
+    focusTarget: () => { focusCalls += 1; },
+    report: (state) => reports.push(state),
+    setTimeoutRef: (callback) => { timers.push(callback); return timers.length; },
+    clearTimeoutRef: () => {},
+    windowRef: {},
+  });
+  assert.equal(navigator.start(), true);
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(resolveCalls, 0);
+  assert.equal(focusCalls, 0);
+  assert.ok(reports.includes("state-not-verified"));
+  navigator.stop();
+});
+
+test("semantic navigation rejects broad targets that are not declared exact", async () => {
+  const reports = [];
+  let focusCalls = 0;
+  const timers = [];
+  const navigator = createSiteNavigator({
+    adapter: {
+      getIntent: () => ({ target: { field: "hourly-rate" } }),
+      activate: () => {},
+      applyState: () => {},
+      isReady: () => true,
+      verifyState: () => true,
+      resolveTarget: () => ({ target: {}, kind: "staff-card" }),
+    },
+    documentRef: { body: null },
+    focusTarget: () => { focusCalls += 1; },
+    report: (state) => reports.push(state),
+    setTimeoutRef: (callback) => { timers.push(callback); return timers.length; },
+    clearTimeoutRef: () => {},
+    windowRef: {},
+  });
+  navigator.start();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(focusCalls, 0);
+  assert.ok(reports.includes("inexact-target"));
+  navigator.stop();
 });
