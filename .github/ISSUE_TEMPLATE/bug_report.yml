@@ -1,0 +1,33 @@
+name: Navigation bug
+description: Report a layout where an exact target is not revealed correctly.
+title: "[Bug]: "
+labels: [bug]
+body:
+  - type: textarea
+    id: layout
+    attributes:
+      label: Layout pattern
+      description: Describe the scroll containers, sticky or fixed elements, dialogs, shadow roots, and rendering behavior.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproduction
+      description: Link a repository or provide compact HTML, CSS, and JavaScript.
+    validations:
+      required: true
+  - type: dropdown
+    id: viewport
+    attributes:
+      label: Affected viewport
+      multiple: true
+      options: [Desktop, Tablet, Touch mobile]
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected and actual behavior
+    validations:
+      required: true

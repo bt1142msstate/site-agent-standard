@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Site Navigator</title>
+  <desc id="desc">A white navigation pointer crossing layered blue interface panels.</desc>
+  <rect width="128" height="128" rx="24" fill="#102a43"/>
+  <rect x="20" y="24" width="88" height="20" rx="6" fill="#1684b3"/>
+  <rect x="20" y="54" width="88" height="50" rx="8" fill="#d9f0f7"/>
+  <path d="M42 36v58l14-14 11 25 13-6-11-24h21L42 36Z" fill="#fff" stroke="#102a43" stroke-width="5" stroke-linejoin="round"/>
+</svg>

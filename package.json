@@ -1,0 +1,48 @@
+{
+  "name": "@bt1142msstate/site-navigator",
+  "version": "0.1.0",
+  "description": "Verified navigation to exact UI targets across nested, dynamic, and responsive web interfaces.",
+  "type": "module",
+  "main": "./src/site-navigator.js",
+  "types": "./src/site-navigator.d.ts",
+  "exports": {
+    ".": {
+      "types": "./src/site-navigator.d.ts",
+      "import": "./src/site-navigator.js"
+    }
+  },
+  "files": [
+    "src",
+    "LICENSE",
+    "README.md"
+  ],
+  "scripts": {
+    "test": "node --test tests/unit/*.test.mjs",
+    "test:browser": "playwright test",
+    "check": "npm run test && npm run test:browser"
+  },
+  "keywords": [
+    "navigation",
+    "accessibility",
+    "automation",
+    "scroll",
+    "shadow-dom",
+    "testing"
+  ],
+  "author": "Brandon Temple",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bt1142msstate/site-navigator.git"
+  },
+  "bugs": {
+    "url": "https://github.com/bt1142msstate/site-navigator/issues"
+  },
+  "homepage": "https://github.com/bt1142msstate/site-navigator#readme",
+  "devDependencies": {
+    "@playwright/test": "^1.54.2"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
