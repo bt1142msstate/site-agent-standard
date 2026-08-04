@@ -1,5 +1,14 @@
 const { test, expect } = require("@playwright/test");
 
+async function activateImmediately(page, locator, touch) {
+  const point = await locator.evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    return { x: rect.left + (rect.width / 2), y: rect.top + (rect.height / 2) };
+  });
+  if (touch) await page.touchscreen.tap(point.x, point.y);
+  else await page.mouse.click(point.x, point.y);
+}
+
 test("navigates a clipped, transformed drawer with nested two-axis scrolling", async ({ page }) => {
   await page.goto("/examples/basic/");
   await page.setContent(`
@@ -187,4 +196,157 @@ test("navigates through a shadow root inside a programmatically clipped dialog",
   expect(evidence.active).toBe(true);
   expect(evidence.hit).toBe(true);
   expect(evidence.scrollTop).toBeGreaterThan(0);
+});
+
+test("applies delayed multi-filter state atomically while the navigation tour locks interaction", async ({ page }, testInfo) => {
+  await page.goto("/examples/basic/");
+  await page.setContent(`
+    <link rel="stylesheet" href="/src/navigation-tour.css">
+    <style>
+      body { margin: 0; min-height: 1900px; }
+      .page-header { position: fixed; inset: 0 0 auto; z-index: 10; height: 76px; background: white; }
+      [data-probe] { position: fixed; top: 80px; left: 12px; z-index: 9; }
+      .surface { position: fixed; inset: 92px 10px 10px; overflow: auto; }
+      .spacer { height: 900px; }
+      .wanted { display: block; min-height: 74px; margin-bottom: 700px; }
+      .is-navigation-focus { outline: 4px solid #1684b3; outline-offset: 4px; }
+    </style>
+    <header class="page-header">Application header</header>
+    <button type="button" data-probe>Blocked while navigating</button>
+    <main class="surface">
+      <select data-range><option value="week">Week</option><option value="custom">Custom</option></select>
+      <input data-start value="">
+      <input data-end value="">
+      <select data-staff><option value="">All staff</option></select>
+      <div class="spacer"></div>
+      <div data-target-mount></div>
+    </main>
+  `);
+  await page.evaluate(async () => {
+    const { createNavigationTour, createSiteNavigator } = await import("/src/site-navigator.js");
+    const range = document.querySelector("[data-range]");
+    const start = document.querySelector("[data-start]");
+    const end = document.querySelector("[data-end]");
+    const staff = document.querySelector("[data-staff]");
+    const requestedState = {
+      end: "08/04/2026",
+      range: "custom",
+      staff: "staff-42",
+      start: "01/01/2026",
+    };
+    window.probeClicks = 0;
+    document.querySelector("[data-probe]").addEventListener("click", () => { window.probeClicks += 1; });
+    const renderTarget = () => {
+      if (range.value !== requestedState.range || start.value !== requestedState.start
+        || end.value !== requestedState.end || staff.value !== requestedState.staff) return;
+      const target = document.createElement("button");
+      target.className = "wanted";
+      target.textContent = "Exact combined result";
+      document.querySelector("[data-target-mount]").replaceChildren(target);
+    };
+    [range, start, end, staff].forEach((control) => control.addEventListener("change", renderTarget));
+    setTimeout(() => staff.append(new Option("Requested staff", "staff-42")), 650);
+    const tour = createNavigationTour({ documentRef: document, windowRef: window });
+    let controller;
+    controller = createSiteNavigator({
+      adapter: {
+        getIntent: () => ({ state: requestedState, target: { id: "combined-result" } }),
+        activate: () => {},
+        applyState: ({ intent }) => {
+          if (range.value !== intent.state.range) {
+            range.value = intent.state.range;
+            range.dispatchEvent(new Event("change", { bubbles: true }));
+            return;
+          }
+          if (start.value !== intent.state.start || end.value !== intent.state.end) {
+            start.value = intent.state.start;
+            end.value = intent.state.end;
+            end.dispatchEvent(new Event("change", { bubbles: true }));
+            return;
+          }
+          if (Array.from(staff.options).some(({ value }) => value === intent.state.staff)
+            && staff.value !== intent.state.staff) {
+            staff.value = intent.state.staff;
+            staff.dispatchEvent(new Event("change", { bubbles: true }));
+          }
+        },
+        isReady: () => Boolean(document.querySelector(".wanted")),
+        verifyState: ({ intent }) => ({
+          reason: "combined-filter-mismatch",
+          verified: range.value === intent.state.range && start.value === intent.state.start
+            && end.value === intent.state.end && staff.value === intent.state.staff,
+        }),
+        resolveTarget: () => {
+          const target = document.querySelector(".wanted");
+          return target ? { exact: true, kind: "combined-result", target } : null;
+        },
+      },
+      documentRef: document,
+      focusOptions: { headerSelector: ".page-header" },
+      report: (state, descriptor) => {
+        document.documentElement.dataset.navigationState = state;
+        tour.update(state, descriptor);
+      },
+      windowRef: window,
+    });
+    tour.setCancelHandler((reason) => controller.stop(reason));
+    controller.start();
+  });
+
+  await expect(page.locator("html")).toHaveAttribute("data-site-navigation-locked", "true");
+  await expect(page.locator("[data-site-navigation-tour]")).toHaveAttribute("data-navigation-active", "true");
+  await activateImmediately(page, page.locator("[data-probe]"), testInfo.project.name.includes("touch"));
+  await expect.poll(() => page.evaluate(() => window.probeClicks)).toBe(0);
+  await expect(page.locator("html")).toHaveAttribute("data-navigation-state", "focused");
+  await expect(page.locator("[data-range]")).toHaveValue("custom");
+  await expect(page.locator("[data-start]")).toHaveValue("01/01/2026");
+  await expect(page.locator("[data-end]")).toHaveValue("08/04/2026");
+  await expect(page.locator("[data-staff]")).toHaveValue("staff-42");
+  await expect(page.locator("html")).not.toHaveAttribute("data-site-navigation-locked", "true");
+  await expect(page.locator(".wanted")).toHaveAttribute("data-verified-navigation-state", "visible");
+  await expect(page.locator(".wanted")).toBeFocused();
+  await page.locator("[data-probe]").click();
+  await expect.poll(() => page.evaluate(() => window.probeClicks)).toBe(1);
+});
+
+test("hard deadline releases the navigation tour when an adapter never becomes ready", async ({ page }, testInfo) => {
+  await page.goto("/examples/basic/");
+  await page.setContent(`
+    <link rel="stylesheet" href="/src/navigation-tour.css">
+    <button type="button" data-probe>Available after timeout</button>
+  `);
+  await page.evaluate(async () => {
+    const { createNavigationTour, createSiteNavigator } = await import("/src/site-navigator.js");
+    window.probeClicks = 0;
+    document.querySelector("[data-probe]").addEventListener("click", () => { window.probeClicks += 1; });
+    const tour = createNavigationTour({ documentRef: document, maxDurationMs: 1200, windowRef: window });
+    let controller;
+    controller = createSiteNavigator({
+      adapter: {
+        getIntent: () => ({ state: { pending: true } }),
+        activate: () => {},
+        applyState: () => {},
+        isReady: () => false,
+        verifyState: () => false,
+        resolveTarget: () => null,
+      },
+      documentRef: document,
+      report: (state, descriptor) => {
+        document.documentElement.dataset.navigationState = state;
+        tour.update(state, descriptor);
+      },
+      timeoutMs: 1000,
+      windowRef: window,
+    });
+    tour.setCancelHandler((reason) => controller.stop(reason));
+    controller.start();
+  });
+
+  await expect(page.locator("html")).toHaveAttribute("data-site-navigation-locked", "true");
+  await activateImmediately(page, page.locator("[data-probe]"), testInfo.project.name.includes("touch"));
+  await expect.poll(() => page.evaluate(() => window.probeClicks)).toBe(0);
+  await expect(page.locator("html")).toHaveAttribute("data-navigation-state", "timed-out");
+  await expect(page.locator("html")).not.toHaveAttribute("data-site-navigation-locked", "true");
+  await page.locator("[data-probe]").click();
+  await expect.poll(() => page.evaluate(() => window.probeClicks)).toBe(1);
 });

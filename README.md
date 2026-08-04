@@ -30,7 +30,7 @@ in small adapters outside the engine.
 ## Install
 
 ```bash
-npm install github:bt1142msstate/site-navigator#v0.2.0
+npm install github:bt1142msstate/site-navigator#v0.3.0
 ```
 
 The package is currently distributed from this repository. An npm release can
@@ -66,20 +66,37 @@ and verify state before its exact target exists. A host adapter is required;
 there is deliberately no semantic DOM fallback:
 
 ```js
-import { createSiteNavigator } from "@bt1142msstate/site-navigator";
+import {
+  createNavigationTour,
+  createSiteNavigator,
+} from "@bt1142msstate/site-navigator";
+import "@bt1142msstate/site-navigator/navigation-tour.css";
+
+const tour = createNavigationTour({
+  title: "Taking you there",
+  maxDurationMs: 21_000,
+});
 
 const controller = createSiteNavigator({
   adapter: {
     getIntent: () => ({
       route: "orders",
-      state: { period: "year-to-date" },
+      state: {
+        ownerReference: "opaque-owner-reference",
+        period: "year-to-date",
+      },
       target: { orderReference: "opaque-order-reference" },
     }),
     activate: ({ intent }) => appRouter.open(intent.route),
-    applyState: ({ intent }) => orderController.setPeriod(intent.state.period),
+    applyState: ({ intent }) => {
+      orderController.setPeriod(intent.state.period);
+      orderController.setOwner(intent.state.ownerReference);
+    },
     isReady: () => orderController.hasLoaded(),
     verifyState: ({ intent }) => ({
-      verified: orderController.getPeriod() === intent.state.period,
+      verified:
+        orderController.getPeriod() === intent.state.period
+        && orderController.getOwner() === intent.state.ownerReference,
       reason: "period-mismatch",
     }),
     resolveTarget: ({ intent }) => {
@@ -89,12 +106,21 @@ const controller = createSiteNavigator({
   },
   focusOptions: { headerSelector: ".app-header" },
   report: (state, destination) => {
+    tour.update(state, destination);
     console.log(state, destination?.kind);
   },
+  onSettled: ({ state }) => tour.update(state),
 });
 
+tour.setCancelHandler((reason) => controller.cancel(reason));
 controller.start();
 ```
+
+The optional tour is rendered in the browser top layer. While navigation is in
+progress, it shows the current phase and blocks trusted user input that could
+conflict with adapter actions. Programmatic adapter events continue to work.
+Users can cancel with the close control or Escape, and the safety deadline
+always releases the page if navigation cannot finish.
 
 Do not place untrusted values directly into selectors as shown in a simplified
 example. Validate route values and use `CSS.escape()` or opaque application
@@ -118,6 +144,12 @@ passes. It rejects missing adapters and descriptors that do not explicitly set
 "today" view, and prevents broad-container highlights when a field adapter is
 missing.
 
+Treat requested state as one atomic destination. When an intent contains a date
+range, person, status, and group, `applyState` must apply all four and
+`verifyState` must verify all four together. If options or records load later,
+the engine retries the adapter until the full state is verified or the hard
+deadline expires. It never reports success for a partially applied view.
+
 `focusVerifiedNavigationTarget()` remains available as a low-level geometry
 primitive when the application has already resolved a trusted element. It does
 not infer semantics or search for a likely target.
@@ -137,6 +169,8 @@ include:
 - collapsed `details` ancestors;
 - full-screen and desktop top-layer dialogs;
 - delayed targets and listener/framework replacement;
+- delayed filter options and combined state that starts in the wrong state;
+- trusted touch/mouse input blocking during navigation and release on timeout;
 - open shadow roots and composed ancestry;
 - center-point hit verification against overlays;
 - keyboard focus and reduced motion.

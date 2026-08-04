@@ -1,3 +1,5 @@
+export { createNavigationTour } from "./navigation-tour.js";
+
 function getParentElement(target) {
   return target?.parentElement || target?.getRootNode?.()?.host || null;
 }
@@ -290,8 +292,10 @@ export function createSiteNavigator(options = {}) {
   const MutationObserverRef = options.MutationObserverRef || windowRef.MutationObserver;
   const timeoutMs = Math.max(1000, Number(options.timeoutMs || 20_000));
   let timeout = 0;
+  let deadlineTimeout = 0;
   let observer = null;
   let stopped = false;
+  let settled = false;
   let focused = false;
   let focusInProgress = false;
   let startedAt = 0;
@@ -305,26 +309,53 @@ export function createSiteNavigator(options = {}) {
 
   function clearScheduledAttempt() {
     if (timeout) clearTimeoutRef?.(timeout);
+    if (deadlineTimeout) clearTimeoutRef?.(deadlineTimeout);
     timeout = 0;
+    deadlineTimeout = 0;
   }
 
-  function stop() {
+  function cleanup() {
     stopped = true;
     clearScheduledAttempt();
     observer?.disconnect?.();
     observer = null;
   }
 
+  function finish(state, descriptor = null) {
+    if (settled) return;
+    settled = true;
+    report(state, descriptor);
+    options.onSettled?.({ descriptor, reason: descriptor?.reason || state, state });
+    cleanup();
+  }
+
+  function stop(reason = "cancelled") {
+    if (settled || stopped) return;
+    finish(reason, { reason });
+  }
+
   function scheduleAttempt(delay = 80) {
-    if (stopped || focused || timeout) return;
+    if (stopped || settled || focused || timeout) return;
     timeout = setTimeoutRef?.(() => {
       timeout = 0;
       attempt();
     }, delay) || 0;
   }
 
+  function retry(state, descriptor = null, reason = state) {
+    if (settled || stopped) return;
+    focusInProgress = false;
+    lastFailure = reason;
+    report(state, descriptor);
+    if (Date.now() - startedAt >= timeoutMs) {
+      finish(NAVIGATION_FAILURES.timedOut, { reason: lastFailure || NAVIGATION_FAILURES.targetNotFound });
+      return;
+    }
+    scheduleAttempt(state === "retrying" ? 80 : 100);
+  }
+
   async function attempt() {
-    if (stopped || focused || focusInProgress) return;
+    if (stopped || settled || focused || focusInProgress) return;
     focusInProgress = true;
     attemptNumber += 1;
     const context = Object.freeze({
@@ -336,39 +367,38 @@ export function createSiteNavigator(options = {}) {
     report("activating");
     try {
       await adapter.activate(context);
+      if (settled || stopped) return;
       report("applying-state");
       await adapter.applyState(context);
+      if (settled || stopped) return;
       const ready = await adapter.isReady(context);
       if (!ready) {
-        lastFailure = "not-ready";
-        report("waiting");
-        focusInProgress = false;
-        scheduleAttempt(100);
+        retry("waiting", null, "not-ready");
         return;
       }
       const verification = normalizeVerification(await adapter.verifyState(context));
       if (!verification.verified) {
-        lastFailure = verification.reason;
-        report("state-not-verified");
-        focusInProgress = false;
-        scheduleAttempt(100);
+        retry("state-not-verified", null, verification.reason);
         return;
       }
     } catch (error) {
-      lastFailure = String(error?.code || error?.message || "adapter-error");
-      report("adapter-error");
-      focusInProgress = false;
-      scheduleAttempt(100);
+      retry("adapter-error", null, String(error?.code || error?.message || "adapter-error"));
       return;
     }
 
-    const descriptor = await adapter.resolveTarget(context);
+    if (settled || stopped) return;
+    report("locating");
+    let descriptor = null;
+    try {
+      descriptor = await adapter.resolveTarget(context);
+    } catch (error) {
+      retry("adapter-error", null, String(error?.code || error?.message || "adapter-error"));
+      return;
+    }
+    if (settled || stopped) return;
     if (descriptor?.target) {
       if (descriptor.exact !== true) {
-        lastFailure = NAVIGATION_FAILURES.inexactTarget;
-        report("inexact-target", descriptor);
-        focusInProgress = false;
-        scheduleAttempt(100);
+        retry("inexact-target", descriptor, NAVIGATION_FAILURES.inexactTarget);
         return;
       }
       report("scrolling", descriptor);
@@ -382,29 +412,16 @@ export function createSiteNavigator(options = {}) {
           focusInProgress = false;
           if (visible && target?.isConnected !== false) {
             focused = true;
-            report("focused", descriptor);
-            stop();
+            finish("focused", descriptor);
             return;
           }
-          lastFailure = reason || "not-visible";
-          report("retrying", descriptor);
-          scheduleAttempt(80);
+          retry("retrying", descriptor, reason || "not-visible");
         },
       });
     } else {
-      lastFailure = NAVIGATION_FAILURES.targetNotFound;
-      focusInProgress = false;
-      report("target-not-found");
-    }
-    if (focused || stopped) return;
-    if (Date.now() - startedAt >= timeoutMs) {
-      report(lastFailure === "outside-visible-region" ? "not-visible" : NAVIGATION_FAILURES.timedOut, {
-        reason: lastFailure || NAVIGATION_FAILURES.targetNotFound,
-      });
-      stop();
+      retry("target-not-found", null, NAVIGATION_FAILURES.targetNotFound);
       return;
     }
-    scheduleAttempt(100);
   }
 
   function start() {
@@ -417,6 +434,9 @@ export function createSiteNavigator(options = {}) {
     if (!intent) return false;
     startedAt = Date.now();
     report("waiting");
+    deadlineTimeout = setTimeoutRef?.(() => {
+      finish(NAVIGATION_FAILURES.timedOut, { reason: lastFailure || NAVIGATION_FAILURES.targetNotFound });
+    }, timeoutMs) || 0;
     if (MutationObserverRef && documentRef.body) {
       observer = new MutationObserverRef(() => scheduleAttempt(0));
       observer.observe(documentRef.body, {
@@ -430,7 +450,7 @@ export function createSiteNavigator(options = {}) {
     return true;
   }
 
-  return { attempt, start, stop };
+  return { attempt, cancel: stop, start, stop };
 }
 
 export const createVerifiedNavigationController = createSiteNavigator;
