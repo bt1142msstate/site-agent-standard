@@ -67,12 +67,12 @@ there is deliberately no semantic DOM fallback:
 
 ```js
 import {
-  createNavigationTour,
+  createNavigationProgress,
   createSiteNavigator,
 } from "@bt1142msstate/site-navigator";
-import "@bt1142msstate/site-navigator/navigation-tour.css";
+import "@bt1142msstate/site-navigator/navigation-progress.css";
 
-const tour = createNavigationTour({
+const progress = createNavigationProgress({
   title: "Taking you there",
   maxDurationMs: 21_000,
 });
@@ -106,19 +106,19 @@ const controller = createSiteNavigator({
   },
   focusOptions: { headerSelector: ".app-header" },
   report: (state, destination) => {
-    tour.update(state, destination);
+    progress.update(state, destination);
     console.log(state, destination?.kind);
   },
-  onSettled: ({ state }) => tour.update(state),
+  onSettled: ({ state }) => progress.update(state),
 });
 
-tour.setCancelHandler((reason) => controller.cancel(reason));
+progress.setCancelHandler((reason) => controller.cancel(reason));
 controller.start();
 ```
 
-The optional tour is rendered in the browser top layer. While navigation is in
-progress, it shows the current phase and blocks trusted user input that could
-conflict with adapter actions. Programmatic adapter events continue to work.
+The optional navigation progress panel is rendered in the browser top layer.
+While navigation is in progress, it shows the current phase and blocks trusted
+user input that could conflict with adapter actions. Programmatic adapter events continue to work.
 Users can cancel with the close control or Escape, and the safety deadline
 always releases the page if navigation cannot finish.
 

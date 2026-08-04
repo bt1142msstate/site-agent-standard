@@ -198,10 +198,10 @@ test("navigates through a shadow root inside a programmatically clipped dialog",
   expect(evidence.scrollTop).toBeGreaterThan(0);
 });
 
-test("applies delayed multi-filter state atomically while the navigation tour locks interaction", async ({ page }, testInfo) => {
+test("applies delayed multi-filter state atomically while the navigation progress locks interaction", async ({ page }, testInfo) => {
   await page.goto("/examples/basic/");
   await page.setContent(`
-    <link rel="stylesheet" href="/src/navigation-tour.css">
+    <link rel="stylesheet" href="/src/navigation-progress.css">
     <style>
       body { margin: 0; min-height: 1900px; }
       .page-header { position: fixed; inset: 0 0 auto; z-index: 10; height: 76px; background: white; }
@@ -223,7 +223,7 @@ test("applies delayed multi-filter state atomically while the navigation tour lo
     </main>
   `);
   await page.evaluate(async () => {
-    const { createNavigationTour, createSiteNavigator } = await import("/src/site-navigator.js");
+    const { createNavigationProgress, createSiteNavigator } = await import("/src/site-navigator.js");
     const range = document.querySelector("[data-range]");
     const start = document.querySelector("[data-start]");
     const end = document.querySelector("[data-end]");
@@ -246,7 +246,7 @@ test("applies delayed multi-filter state atomically while the navigation tour lo
     };
     [range, start, end, staff].forEach((control) => control.addEventListener("change", renderTarget));
     setTimeout(() => staff.append(new Option("Requested staff", "staff-42")), 650);
-    const tour = createNavigationTour({ documentRef: document, windowRef: window });
+    const progress = createNavigationProgress({ documentRef: document, windowRef: window });
     let controller;
     controller = createSiteNavigator({
       adapter: {
@@ -285,16 +285,16 @@ test("applies delayed multi-filter state atomically while the navigation tour lo
       focusOptions: { headerSelector: ".page-header" },
       report: (state, descriptor) => {
         document.documentElement.dataset.navigationState = state;
-        tour.update(state, descriptor);
+        progress.update(state, descriptor);
       },
       windowRef: window,
     });
-    tour.setCancelHandler((reason) => controller.stop(reason));
+    progress.setCancelHandler((reason) => controller.stop(reason));
     controller.start();
   });
 
   await expect(page.locator("html")).toHaveAttribute("data-site-navigation-locked", "true");
-  await expect(page.locator("[data-site-navigation-tour]")).toHaveAttribute("data-navigation-active", "true");
+  await expect(page.locator("[data-site-navigation-progress]")).toHaveAttribute("data-navigation-active", "true");
   await activateImmediately(page, page.locator("[data-probe]"), testInfo.project.name.includes("touch"));
   await expect.poll(() => page.evaluate(() => window.probeClicks)).toBe(0);
   await expect(page.locator("html")).toHaveAttribute("data-navigation-state", "focused");
@@ -309,17 +309,17 @@ test("applies delayed multi-filter state atomically while the navigation tour lo
   await expect.poll(() => page.evaluate(() => window.probeClicks)).toBe(1);
 });
 
-test("hard deadline releases the navigation tour when an adapter never becomes ready", async ({ page }, testInfo) => {
+test("hard deadline releases the navigation progress when an adapter never becomes ready", async ({ page }, testInfo) => {
   await page.goto("/examples/basic/");
   await page.setContent(`
-    <link rel="stylesheet" href="/src/navigation-tour.css">
+    <link rel="stylesheet" href="/src/navigation-progress.css">
     <button type="button" data-probe>Available after timeout</button>
   `);
   await page.evaluate(async () => {
-    const { createNavigationTour, createSiteNavigator } = await import("/src/site-navigator.js");
+    const { createNavigationProgress, createSiteNavigator } = await import("/src/site-navigator.js");
     window.probeClicks = 0;
     document.querySelector("[data-probe]").addEventListener("click", () => { window.probeClicks += 1; });
-    const tour = createNavigationTour({ documentRef: document, maxDurationMs: 1200, windowRef: window });
+    const progress = createNavigationProgress({ documentRef: document, maxDurationMs: 1200, windowRef: window });
     let controller;
     controller = createSiteNavigator({
       adapter: {
@@ -333,12 +333,12 @@ test("hard deadline releases the navigation tour when an adapter never becomes r
       documentRef: document,
       report: (state, descriptor) => {
         document.documentElement.dataset.navigationState = state;
-        tour.update(state, descriptor);
+        progress.update(state, descriptor);
       },
       timeoutMs: 1000,
       windowRef: window,
     });
-    tour.setCancelHandler((reason) => controller.stop(reason));
+    progress.setCancelHandler((reason) => controller.stop(reason));
     controller.start();
   });
 

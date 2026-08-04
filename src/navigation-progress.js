@@ -70,7 +70,7 @@ function appendElement(documentRef, parent, tagName, className, text = "") {
   return element;
 }
 
-function eventComesFromTour(event, root) {
+function eventComesFromProgress(event, root) {
   const path = event.composedPath?.() || [];
   return path.includes(root) || root.contains?.(event.target);
 }
@@ -79,7 +79,7 @@ function eventComesFromTour(event, root) {
  * Presents navigation progress and temporarily blocks trusted user input while
  * leaving programmatic adapter events untouched.
  */
-export function createNavigationTour(options = {}) {
+export function createNavigationProgress(options = {}) {
   const windowRef = options.windowRef || globalThis;
   const documentRef = options.documentRef || windowRef.document;
   const setTimeoutRef = options.setTimeoutRef || windowRef.setTimeout?.bind(windowRef);
@@ -100,26 +100,26 @@ export function createNavigationTour(options = {}) {
   }
 
   const root = documentRef.createElement("aside");
-  root.className = options.className || "site-navigation-tour";
+  root.className = options.className || "site-navigation-progress";
   root.setAttribute("aria-label", options.label || "Navigation progress");
-  root.setAttribute("data-site-navigation-tour", "");
+  root.setAttribute("data-site-navigation-progress", "");
   root.setAttribute("popover", "manual");
-  const panel = appendElement(documentRef, root, "div", "site-navigation-tour-panel");
-  const indicator = appendElement(documentRef, panel, "span", "site-navigation-tour-indicator");
+  const panel = appendElement(documentRef, root, "div", "site-navigation-progress-panel");
+  const indicator = appendElement(documentRef, panel, "span", "site-navigation-progress-indicator");
   indicator.setAttribute("aria-hidden", "true");
-  appendElement(documentRef, indicator, "span", "site-navigation-tour-indicator-dot");
-  const copy = appendElement(documentRef, panel, "span", "site-navigation-tour-copy");
-  appendElement(documentRef, copy, "strong", "site-navigation-tour-title", options.title || "Taking you there");
-  const message = appendElement(documentRef, copy, "span", "site-navigation-tour-message", phaseCopy.waiting);
+  appendElement(documentRef, indicator, "span", "site-navigation-progress-indicator-dot");
+  const copy = appendElement(documentRef, panel, "span", "site-navigation-progress-copy");
+  appendElement(documentRef, copy, "strong", "site-navigation-progress-title", options.title || "Taking you there");
+  const message = appendElement(documentRef, copy, "span", "site-navigation-progress-message", phaseCopy.waiting);
   message.setAttribute("aria-atomic", "true");
   message.setAttribute("aria-live", "polite");
-  const cancelButton = appendElement(documentRef, panel, "button", "site-navigation-tour-cancel", "X");
+  const cancelButton = appendElement(documentRef, panel, "button", "site-navigation-progress-cancel", "X");
   cancelButton.type = "button";
   cancelButton.setAttribute("aria-label", options.cancelLabel || "Stop navigation");
   cancelButton.title = options.cancelLabel || "Stop navigation";
-  const track = appendElement(documentRef, panel, "span", "site-navigation-tour-track");
+  const track = appendElement(documentRef, panel, "span", "site-navigation-progress-track");
   track.setAttribute("aria-hidden", "true");
-  appendElement(documentRef, track, "span", "site-navigation-tour-track-fill");
+  appendElement(documentRef, track, "span", "site-navigation-progress-track-fill");
 
   const supportsPopover = typeof root.showPopover === "function";
   if (!supportsPopover) root.hidden = true;
@@ -153,7 +153,7 @@ export function createNavigationTour(options = {}) {
   }
 
   function blockUserInteraction(event) {
-    if (!active || event.isTrusted === false || eventComesFromTour(event, root)) return;
+    if (!active || event.isTrusted === false || eventComesFromProgress(event, root)) return;
     if (event.type === "keydown" && event.key === "Escape") {
       event.preventDefault?.();
       cancel("cancelled");

@@ -1,4 +1,7 @@
-export { createNavigationTour } from "./navigation-tour.js";
+export {
+  createNavigationProgress,
+  createNavigationProgress as createNavigationTour,
+} from "./navigation-progress.js";
 
 function getParentElement(target) {
   return target?.parentElement || target?.getRootNode?.()?.host || null;

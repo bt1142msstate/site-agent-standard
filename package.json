@@ -1,6 +1,6 @@
 {
   "name": "@bt1142msstate/site-navigator",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Verified navigation to exact UI targets across nested, dynamic, and responsive web interfaces.",
   "type": "module",
   "main": "./src/site-navigator.js",
@@ -10,7 +10,8 @@
       "types": "./src/site-navigator.d.ts",
       "import": "./src/site-navigator.js"
     },
-    "./navigation-tour.css": "./src/navigation-tour.css"
+    "./navigation-progress.css": "./src/navigation-progress.css",
+    "./navigation-tour.css": "./src/navigation-progress.css"
   },
   "files": [
     "src",

@@ -75,7 +75,7 @@ export interface NavigationControllerOutcome {
   state: string;
 }
 
-export interface NavigationTourOptions {
+export interface NavigationProgressOptions {
   windowRef?: Window;
   documentRef?: Document;
   maxDurationMs?: number;
@@ -86,7 +86,7 @@ export interface NavigationTourOptions {
   onCancel?: (reason: string) => void;
 }
 
-export interface NavigationTour {
+export interface NavigationProgress {
   cancel(reason?: string): void;
   destroy(): void;
   element: HTMLElement;
@@ -95,9 +95,16 @@ export interface NavigationTour {
   update(state: string, descriptor?: NavigationDescriptor | null): void;
 }
 
+/** @deprecated Use NavigationProgressOptions. */
+export type NavigationTourOptions = NavigationProgressOptions;
+/** @deprecated Use NavigationProgress. */
+export type NavigationTour = NavigationProgress;
+
 export declare function isVerifiedNavigationTargetVisible(options: FocusNavigationOptions): boolean;
 export declare function focusVerifiedNavigationTarget(options: FocusNavigationOptions): boolean;
-export declare function createNavigationTour(options?: NavigationTourOptions): NavigationTour;
+export declare function createNavigationProgress(options?: NavigationProgressOptions): NavigationProgress;
+/** @deprecated Use createNavigationProgress. */
+export declare const createNavigationTour: typeof createNavigationProgress;
 export declare const NAVIGATION_FAILURES: Readonly<{
   adapterRequired: "adapter-required";
   inexactTarget: "inexact-target";
