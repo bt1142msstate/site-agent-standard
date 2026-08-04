@@ -32,7 +32,12 @@ jobs:
         run: |
           test "v$(node -p "require('./package.json').version")" = "${{ inputs.tag }}"
           npm ci
-          npm run check
+
+      - name: Install browser test runtime
+        run: npx playwright install --with-deps chromium
+
+      - name: Run release checks
+        run: npm run check
 
       - name: Normalize npm metadata
         run: npm pkg fix
