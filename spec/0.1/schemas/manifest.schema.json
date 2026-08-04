@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/bt1142msstate/site-agent-standard/raw/main/spec/0.1/schemas/manifest.schema.json",
+  "title": "Site Agent manifest",
+  "type": "object",
+  "required": ["standardVersion", "id", "name", "profiles", "queryResources", "navigationDestinations", "actions"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "standardVersion": { "const": "0.1" },
+    "id": { "type": "string", "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$" },
+    "name": { "type": "string", "minLength": 1 },
+    "profiles": {
+      "type": "array",
+      "uniqueItems": true,
+      "contains": { "const": "core" },
+      "items": { "enum": ["core", "query", "navigation", "action"] }
+    },
+    "queryResources": { "type": "array", "items": { "$ref": "query.schema.json#/$defs/resource" } },
+    "navigationDestinations": { "type": "array", "items": { "$ref": "navigation.schema.json#/$defs/destination" } },
+    "actions": { "type": "array", "items": { "$ref": "action.schema.json#/$defs/action" } },
+    "conformance": {
+      "type": "object",
+      "properties": {
+        "claims": { "type": "array", "uniqueItems": true, "items": { "enum": ["core", "query", "navigation", "action"] } },
+        "coverage": {
+          "type": "object",
+          "properties": {
+            "visibleSurfaces": { "enum": ["complete", "partial"] },
+            "humanActions": { "enum": ["complete", "partial"] }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "patternProperties": { "^x-[a-z0-9._-]+$": true },
+  "additionalProperties": false
+}

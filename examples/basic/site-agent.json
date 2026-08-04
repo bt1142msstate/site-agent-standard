@@ -1,0 +1,62 @@
+{
+  "$schema": "../../spec/0.1/schemas/manifest.schema.json",
+  "standardVersion": "0.1",
+  "id": "example.orders",
+  "name": "Example order site",
+  "profiles": ["core", "query", "navigation", "action"],
+  "queryResources": [
+    {
+      "id": "orders",
+      "description": "Permission-scoped example orders and their current status",
+      "visibility": "authenticated",
+      "permissionsAll": ["orders.view"],
+      "execution": "host",
+      "modes": ["records", "count", "summary"],
+      "filters": {
+        "query": { "type": "string" },
+        "status": { "type": "string" },
+        "period": { "type": "string" }
+      },
+      "sorts": ["newest", "oldest"],
+      "maxResults": 50,
+      "destinationId": "orders.detail"
+    }
+  ],
+  "navigationDestinations": [
+    {
+      "id": "orders.detail",
+      "description": "Open the requested order state and focus its exact record",
+      "visibility": "authenticated",
+      "permissionsAll": ["orders.view"],
+      "route": "/orders/",
+      "precision": "record",
+      "exact": true,
+      "targetKinds": ["order"],
+      "stateSchema": {
+        "type": "object",
+        "properties": { "period": { "type": "string" }, "status": { "type": "string" } }
+      }
+    }
+  ],
+  "actions": [
+    {
+      "id": "orders.archive",
+      "description": "Archive one reviewed order through the site's authoritative handler",
+      "visibility": "authenticated",
+      "permissionsAll": ["orders.manage"],
+      "risk": "consequential",
+      "confirmation": "explicit",
+      "inputSchema": {
+        "type": "object",
+        "required": ["orderReference"],
+        "properties": { "orderReference": { "type": "string" } },
+        "additionalProperties": false
+      },
+      "destinationId": "orders.detail"
+    }
+  ],
+  "conformance": {
+    "claims": ["core", "query", "navigation", "action"],
+    "coverage": { "visibleSurfaces": "complete", "humanActions": "complete" }
+  }
+}

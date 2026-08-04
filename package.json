@@ -1,29 +1,52 @@
 {
-  "name": "@bt1142msstate/site-navigator",
-  "version": "0.3.1",
-  "description": "Verified navigation to exact UI targets across nested, dynamic, and responsive web interfaces.",
+  "name": "@bt1142msstate/site-agent-standard",
+  "version": "0.4.0",
+  "description": "A transport-neutral standard and reference runtime for permission-scoped site query, verified navigation, and safe actions.",
   "type": "module",
-  "main": "./src/site-navigator.js",
-  "types": "./src/site-navigator.d.ts",
+  "main": "./src/site-agent.js",
+  "types": "./src/site-agent.d.ts",
+  "bin": {
+    "site-agent": "./bin/site-agent.js"
+  },
   "exports": {
     ".": {
+      "types": "./src/site-agent.d.ts",
+      "import": "./src/site-agent.js"
+    },
+    "./navigation": {
       "types": "./src/site-navigator.d.ts",
       "import": "./src/site-navigator.js"
     },
+    "./manifest": {
+      "types": "./src/site-agent.d.ts",
+      "import": "./src/manifest.js"
+    },
     "./navigation-progress.css": "./src/navigation-progress.css",
-    "./navigation-tour.css": "./src/navigation-progress.css"
+    "./schemas/manifest": "./spec/0.1/schemas/manifest.schema.json",
+    "./schemas/query": "./spec/0.1/schemas/query.schema.json",
+    "./schemas/navigation": "./spec/0.1/schemas/navigation.schema.json",
+    "./schemas/action": "./spec/0.1/schemas/action.schema.json"
   },
   "files": [
+    "bin",
     "src",
+    "spec",
+    "examples",
     "LICENSE",
     "README.md"
   ],
   "scripts": {
     "test": "node --test tests/unit/*.test.mjs",
     "test:browser": "playwright test",
-    "check": "npm run test && npm run test:browser"
+    "test:conformance": "node ./bin/site-agent.js test ./examples/basic/site-agent.json",
+    "check": "npm run test && npm run test:conformance && npm run test:browser"
   },
   "keywords": [
+    "agent",
+    "ai",
+    "standard",
+    "query",
+    "actions",
     "navigation",
     "accessibility",
     "automation",
@@ -35,14 +58,15 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/bt1142msstate/site-navigator.git"
+    "url": "git+https://github.com/bt1142msstate/site-agent-standard.git"
   },
   "bugs": {
-    "url": "https://github.com/bt1142msstate/site-navigator/issues"
+    "url": "https://github.com/bt1142msstate/site-agent-standard/issues"
   },
-  "homepage": "https://github.com/bt1142msstate/site-navigator#readme",
+  "homepage": "https://github.com/bt1142msstate/site-agent-standard#readme",
   "devDependencies": {
-    "@playwright/test": "^1.54.2"
+    "@playwright/test": "^1.54.2",
+    "ajv": "^8.20.0"
   },
   "engines": {
     "node": ">=20"

@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/bt1142msstate/site-agent-standard/raw/main/spec/0.1/schemas/action.schema.json",
+  "$defs": {
+    "action": {
+      "type": "object",
+      "required": ["id", "description", "visibility", "risk", "confirmation", "inputSchema"],
+      "properties": {
+        "id": { "type": "string" },
+        "description": { "type": "string", "minLength": 8 },
+        "visibility": { "enum": ["public", "authenticated"] },
+        "permissionsAll": { "type": "array", "items": { "type": "string" } },
+        "permissionsAny": { "type": "array", "items": { "type": "string" } },
+        "risk": { "enum": ["read", "reversible", "consequential", "destructive"] },
+        "confirmation": { "enum": ["none", "explicit", "typed"] },
+        "inputSchema": { "type": "object" },
+        "destinationId": { "type": "string" }
+      },
+      "patternProperties": { "^x-[a-z0-9._-]+$": true },
+      "additionalProperties": false
+    }
+  }
+}

@@ -1,0 +1,34 @@
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
+import test from "node:test";
+import { fileURLToPath } from "node:url";
+import Ajv2020 from "ajv/dist/2020.js";
+
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
+const schemaRoot = path.join(root, "spec/0.1/schemas");
+const readJson = (file) => JSON.parse(fs.readFileSync(file, "utf8"));
+
+function validator() {
+  const ajv = new Ajv2020({ allErrors: true, strict: true });
+  for (const name of ["query", "navigation", "action"]) {
+    ajv.addSchema(readJson(path.join(schemaRoot, `${name}.schema.json`)));
+  }
+  return ajv.compile(readJson(path.join(schemaRoot, "manifest.schema.json")));
+}
+
+test("the normative JSON Schema accepts the complete example", () => {
+  const validate = validator();
+  const example = readJson(path.join(root, "examples/basic/site-agent.json"));
+  assert.equal(validate(example), true, JSON.stringify(validate.errors));
+});
+
+test("the normative JSON Schema rejects an unversioned broad destination", () => {
+  const validate = validator();
+  const example = readJson(path.join(root, "examples/basic/site-agent.json"));
+  delete example.standardVersion;
+  example.navigationDestinations[0].exact = false;
+  assert.equal(validate(example), false);
+  assert.ok(validate.errors.some(({ instancePath, keyword }) => instancePath === "" && keyword === "required"));
+  assert.ok(validate.errors.some(({ instancePath }) => instancePath.endsWith("/exact")));
+});

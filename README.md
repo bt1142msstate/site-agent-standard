@@ -1,205 +1,173 @@
 <p align="center">
-  <img src="docs/site-navigator-mark.svg" width="104" height="104" alt="Site Navigator logo">
+  <img src="docs/site-navigator-mark.svg" width="104" height="104" alt="Site Agent Standard logo">
 </p>
 
-# Site Navigator
+# Site Agent Standard
 
-Site Navigator reliably reveals and focuses an exact element in complex,
-responsive web interfaces. It handles the cases where `scrollIntoView()` alone
-is not enough: nested two-axis scrollers, sticky headers, clipped drawers,
-collapsed details, top-layer dialogs, shadow roots, delayed rendering, and DOM
-replacement during live updates.
+Site Agent Standard is a transport-neutral contract for sites that want
+authorized software agents, deterministic automation, and tutorials to use the
+same capabilities as a person. It combines three independently conforming
+profiles without collapsing them into one unsafe API:
 
-The runtime has no dependencies. Application-specific routes and selectors stay
-in small adapters outside the engine.
+- **Query** returns bounded, permission-scoped information and opaque records.
+- **Navigation** applies complete UI state and verifies the smallest exact
+  visible target.
+- **Action** previews, confirms, executes, audits, and verifies changes through
+  the site's authoritative domain handlers.
 
-## Why it is different
-
-- **Verified, not hopeful.** Success is reported only after geometry stabilizes,
-  every clipping boundary contains the target, and browser hit testing confirms
-  that an overlay is not covering it.
-- **Dynamic UI aware.** A controller can activate tabs or dialogs, wait for
-  asynchronous data, and retry when a framework replaces the target.
-- **Responsive by design.** The same behavior is tested at desktop, tablet, and
-  touch-mobile sizes.
-- **Accessible.** The resolved control receives keyboard focus, collapsed
-  `details` ancestors open, and reduced-motion preferences are respected.
-- **Framework independent.** It works with browser DOM APIs and supports shadow
-  host ancestry without requiring React, Vue, or another runtime.
+The repository includes the normative 0.1 draft, a dependency-free reference
+runtime, a CLI conformance checker, and the battle-tested Site Navigator engine
+as the Navigation profile implementation.
 
 ## Install
 
 ```bash
-npm install github:bt1142msstate/site-navigator#v0.3.0
+npm install github:bt1142msstate/site-agent-standard#v0.4.0
 ```
 
-The package is currently distributed from this repository. An npm release can
-be added after the public API has received external feedback.
+```js
+import {
+  createSiteAgent,
+  createSiteNavigator,
+} from "@bt1142msstate/site-agent-standard";
+```
 
-## Focus a target
+Version `0.4.0` intentionally renames the package from
+`@bt1142msstate/site-navigator`. Existing `v0.3.1` and older tags retain their
+original package identity.
+
+## Publish a manifest
+
+Serve a public-only discovery document at `/site-agent.json` and advertise it:
+
+```html
+<link rel="alternate" type="application/json" href="/site-agent.json"
+      data-site-agent-manifest>
+```
+
+The public document must omit authenticated capabilities and implementation
+extensions. A signed-in application may provide a permission-filtered manifest
+through its host adapter.
+
+See [the complete example](examples/basic/site-agent.json) and the
+[normative draft](spec/0.1/README.md).
+
+## Create an agent runtime
 
 ```js
-import { focusVerifiedNavigationTarget } from "@bt1142msstate/site-navigator";
+import { createSiteAgent } from "@bt1142msstate/site-agent-standard";
+import manifest from "./site-agent.json" with { type: "json" };
 
-focusVerifiedNavigationTarget({
-  target: document.querySelector("[data-order-id='order-42']"),
-  headerSelector: ".app-header",
-  onSettled({ visible, reason }) {
-    console.log({ visible, reason });
+const agent = createSiteAgent({
+  manifest,
+  getContext: () => session.siteAgentContext(),
+  adapters: {
+    query: ({ resource, request, context }) =>
+      dataAdapters.get(resource.id).query({ request, context }),
+    navigation: ({ destination, intent }) =>
+      navigationAdapters.get(destination.id).navigate(intent),
+    action: {
+      prepare: (input) => actions.prepare(input),
+      confirm: (input) => actions.confirm(input),
+      cancel: (input) => actions.cancel(input),
+    },
   },
 });
 ```
 
-Add your own highlight style:
+The standard does not give the model a database path, CSS selector, arbitrary
+URL, or mutation envelope. Sites resolve semantic capability IDs and opaque
+references inside their own authorization boundary.
 
-```css
-.is-navigation-focus {
-  outline: 4px solid #1684b3;
-  outline-offset: 4px;
-}
+## Query, navigate, and act
+
+```js
+const result = await agent.query({
+  resourceId: "orders",
+  filters: { status: "open", period: "year-to-date" },
+});
+
+await agent.navigate(result.items[0].destination);
+
+const plan = await agent.prepareAction({
+  actionId: "orders.archive",
+  target: { reference: result.items[0].reference },
+});
+
+await agent.confirmAction({
+  actionId: plan.actionId,
+  planId: plan.planId,
+  confirmation: true,
+});
 ```
 
-## Navigate through dynamic UI
+Every operation rechecks the current actor. A state-changing plan cannot be
+confirmed twice through the reference runtime, and the authoritative host
+handler remains responsible for durable idempotency and stale-state rejection.
 
-Use the controller when a route must open a tab, apply filters, wait for data,
-and verify state before its exact target exists. A host adapter is required;
-there is deliberately no semantic DOM fallback:
+## Verified navigation
+
+The Navigation reference implementation handles nested two-axis scrollers,
+sticky headers, clipped drawers, collapsed details, dialogs, open shadow roots,
+delayed rendering, and target replacement. Application routes and selectors
+stay in host adapters. There is deliberately no semantic DOM fallback.
 
 ```js
 import {
   createNavigationProgress,
   createSiteNavigator,
-} from "@bt1142msstate/site-navigator";
-import "@bt1142msstate/site-navigator/navigation-progress.css";
-
-const progress = createNavigationProgress({
-  title: "Taking you there",
-  maxDurationMs: 21_000,
-});
+} from "@bt1142msstate/site-agent-standard/navigation";
+import "@bt1142msstate/site-agent-standard/navigation-progress.css";
 
 const controller = createSiteNavigator({
   adapter: {
-    getIntent: () => ({
-      route: "orders",
-      state: {
-        ownerReference: "opaque-owner-reference",
-        period: "year-to-date",
-      },
-      target: { orderReference: "opaque-order-reference" },
-    }),
-    activate: ({ intent }) => appRouter.open(intent.route),
-    applyState: ({ intent }) => {
-      orderController.setPeriod(intent.state.period);
-      orderController.setOwner(intent.state.ownerReference);
-    },
-    isReady: () => orderController.hasLoaded(),
-    verifyState: ({ intent }) => ({
-      verified:
-        orderController.getPeriod() === intent.state.period
-        && orderController.getOwner() === intent.state.ownerReference,
-      reason: "period-mismatch",
-    }),
-    resolveTarget: ({ intent }) => {
-      const target = orderController.resolveReference(intent.target.orderReference);
-      return target ? { target, exact: true, kind: "order" } : null;
-    },
+    getIntent: () => destination,
+    activate: ({ intent }) => router.open(intent.route),
+    applyState: ({ intent }) => view.applyAll(intent.state),
+    isReady: () => view.isLoaded(),
+    verifyState: ({ intent }) => view.matches(intent.state),
+    resolveTarget: ({ intent }) => view.resolveExact(intent.target),
   },
-  focusOptions: { headerSelector: ".app-header" },
-  report: (state, destination) => {
-    progress.update(state, destination);
-    console.log(state, destination?.kind);
-  },
-  onSettled: ({ state }) => progress.update(state),
+  report: (state, descriptor) => progress.update(state, descriptor),
 });
 
+const progress = createNavigationProgress();
 progress.setCancelHandler((reason) => controller.cancel(reason));
 controller.start();
 ```
 
-The optional navigation progress panel is rendered in the browser top layer.
-While navigation is in progress, it shows the current phase and blocks trusted
-user input that could conflict with adapter actions. Programmatic adapter events continue to work.
-Users can cancel with the close control or Escape, and the safety deadline
-always releases the page if navigation cannot finish.
+Success is reported only after requested state is verified, geometry is stable,
+every clipping boundary contains the target, and hit testing confirms that the
+target is not covered.
 
-Do not place untrusted values directly into selectors as shown in a simplified
-example. Validate route values and use `CSS.escape()` or opaque application
-references.
-
-## Adapter contract
-
-The engine deliberately does not know routes, business entities, permissions,
-or data stores. A host adapter owns six decisions:
-
-1. `getIntent`: the semantic route, state, and opaque target requested.
-2. `activate`: which application view must be opened.
-3. `applyState`: which filters, ranges, tabs, or expanded records must be set.
-4. `isReady`: whether the view and its data are ready to inspect.
-5. `verifyState`: whether the requested state is actually active.
-6. `resolveTarget`: the smallest stable, exact target currently rendered.
-
-The engine will not resolve or highlight a target until state verification
-passes. It rejects missing adapters and descriptors that do not explicitly set
-`exact: true`. This prevents a year-to-date answer from opening a default
-"today" view, and prevents broad-container highlights when a field adapter is
-missing.
-
-Treat requested state as one atomic destination. When an intent contains a date
-range, person, status, and group, `applyState` must apply all four and
-`verifyState` must verify all four together. If options or records load later,
-the engine retries the adapter until the full state is verified or the hard
-deadline expires. It never reports success for a partially applied view.
-
-`focusVerifiedNavigationTarget()` remains available as a low-level geometry
-primitive when the application has already resolved a trusted element. It does
-not infer semantics or search for a likely target.
-
-This boundary makes one engine reusable across applications while keeping
-authorization and data semantics in the host.
-
-## Battle-testing
-
-The browser suite uses deliberately difficult synthetic layouts and runs every
-case in desktop, tablet-touch, and mobile-touch projects. Covered patterns
-include:
-
-- nested horizontal and vertical scroll containers;
-- fixed and sticky outer headers plus sticky internal toolbars;
-- `overflow: hidden`, `overflow: clip`, transforms, and paint containment;
-- collapsed `details` ancestors;
-- full-screen and desktop top-layer dialogs;
-- delayed targets and listener/framework replacement;
-- delayed filter options and combined state that starts in the wrong state;
-- trusted touch/mouse input blocking during navigation and release on timeout;
-- open shadow roots and composed ancestry;
-- center-point hit verification against overlays;
-- keyboard focus and reduced motion.
-
-The fixture set reproduces layout patterns observed read-only on large public
-production sites. External pages are not part of CI because their markup and
-availability are not deterministic.
+## Validate and test
 
 ```bash
-npm install
+site-agent validate ./site-agent.json
+site-agent test ./site-agent.json
 npm run check
 ```
 
-## Scope and limitations
+The browser suite runs deliberately difficult synthetic layouts at desktop,
+tablet-touch, and mobile-touch sizes. A conforming host should additionally
+test Query to Navigation, Action to Requery, permission denial, stale plans,
+duplicate confirmation, and sanitized telemetry.
 
-- The engine navigates within one document. For same-origin iframes, instantiate
-  it with the iframe's `document` and `window`. Browser security prevents a host
-  page from inspecting cross-origin iframe content.
-- Closed shadow roots cannot be inspected from outside their component. The
-  component must expose a target or run its own adapter.
-- Site Navigator does not authorize users or perform mutations.
-- Hit verification can be disabled with `verifyHitTarget: false` for a known
-  non-pointer target, but keeping it enabled is safer for user-facing navigation.
+## Boundaries
 
-## Contributing
+- The standard does not define authentication, natural-language interpretation,
+  a database schema, or a required network transport.
+- Host authorization and domain validation remain authoritative.
+- Static Query resources may execute locally; protected data uses host adapters.
+- The navigator works within one document. Cross-origin frames remain isolated
+  by browser security.
+- Closed shadow roots require their component to expose a target or adapter.
 
-See [CONTRIBUTING.md](CONTRIBUTING.md). New layout behavior requires a minimal
-synthetic reproduction and responsive browser proof. Security concerns should
-follow [SECURITY.md](SECURITY.md).
+## Contributing and security
+
+See [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md), and
+[the 0.1 security requirements](spec/0.1/security.md). New behavior requires a
+minimal synthetic reproduction and profile-appropriate conformance proof.
 
 ## License
 
