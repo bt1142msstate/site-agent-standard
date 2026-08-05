@@ -6,11 +6,11 @@ import { fileURLToPath } from "node:url";
 import Ajv2020 from "ajv/dist/2020.js";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
-const schemaRoot = path.join(root, "spec/0.1/schemas");
+const schemaRoot = path.join(root, "spec/0.2/schemas");
 const readJson = (file) => JSON.parse(fs.readFileSync(file, "utf8"));
 
 function validator() {
-  const ajv = new Ajv2020({ allErrors: true, strict: true });
+  const ajv = new Ajv2020({ allErrors: true, strict: true, validateFormats: false });
   for (const name of ["query", "navigation", "action"]) {
     ajv.addSchema(readJson(path.join(schemaRoot, `${name}.schema.json`)));
   }

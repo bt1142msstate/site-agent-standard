@@ -1,6 +1,6 @@
 {
   "name": "@bt1142msstate/site-agent-standard",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "A transport-neutral standard and reference runtime for permission-scoped site query, verified navigation, and safe actions.",
   "type": "module",
   "main": "./src/site-agent.js",
@@ -21,11 +21,23 @@
       "types": "./src/site-agent.d.ts",
       "import": "./src/manifest.js"
     },
+    "./bindings": {
+      "types": "./src/bindings.d.ts",
+      "import": "./src/bindings.js"
+    },
+    "./conformance": {
+      "types": "./src/conformance.d.ts",
+      "import": "./src/conformance.js"
+    },
     "./navigation-progress.css": "./src/navigation-progress.css",
-    "./schemas/manifest": "./spec/0.1/schemas/manifest.schema.json",
-    "./schemas/query": "./spec/0.1/schemas/query.schema.json",
-    "./schemas/navigation": "./spec/0.1/schemas/navigation.schema.json",
-    "./schemas/action": "./spec/0.1/schemas/action.schema.json"
+    "./schemas/manifest": "./spec/0.2/schemas/manifest.schema.json",
+    "./schemas/query": "./spec/0.2/schemas/query.schema.json",
+    "./schemas/navigation": "./spec/0.2/schemas/navigation.schema.json",
+    "./schemas/action": "./spec/0.2/schemas/action.schema.json",
+    "./schemas/manifest-0.1": "./spec/0.1/schemas/manifest.schema.json",
+    "./schemas/query-0.1": "./spec/0.1/schemas/query.schema.json",
+    "./schemas/navigation-0.1": "./spec/0.1/schemas/navigation.schema.json",
+    "./schemas/action-0.1": "./spec/0.1/schemas/action.schema.json"
   },
   "files": [
     "bin",
@@ -38,7 +50,7 @@
   "scripts": {
     "test": "node --test tests/unit/*.test.mjs",
     "test:browser": "playwright test",
-    "test:conformance": "node ./bin/site-agent.js test ./examples/basic/site-agent.json",
+    "test:conformance": "node ./bin/site-agent.js test ./examples/basic/site-agent.json --adapter ./examples/basic/conformance.mjs",
     "check": "npm run test && npm run test:conformance && npm run test:browser"
   },
   "keywords": [
@@ -64,9 +76,11 @@
     "url": "https://github.com/bt1142msstate/site-agent-standard/issues"
   },
   "homepage": "https://github.com/bt1142msstate/site-agent-standard#readme",
-  "devDependencies": {
-    "@playwright/test": "^1.54.2",
+  "dependencies": {
     "ajv": "^8.20.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.54.2"
   },
   "engines": {
     "node": ">=20"

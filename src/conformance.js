@@ -1,0 +1,159 @@
+import { createPublicDiscoveryManifest, getSiteAgentConformance } from "./manifest.js";
+
+function sanitizedProof(id, profile, status, startedAt, failureCode = "") {
+  return Object.freeze({
+    id,
+    profile,
+    status,
+    durationMs: Date.now() - startedAt,
+    failureCode: String(failureCode || "").slice(0, 120),
+  });
+}
+
+async function runProof(proofs, id, profile, operation) {
+  const startedAt = Date.now();
+  try {
+    await operation();
+    proofs.push(sanitizedProof(id, profile, "passed", startedAt));
+  } catch (error) {
+    proofs.push(sanitizedProof(id, profile, "failed", startedAt, error?.message || error));
+  }
+}
+
+function requireCase(cases, name) {
+  if (!cases?.[name]) throw new Error(`conformance-case-required:${name}`);
+  return cases[name];
+}
+
+export async function runSiteAgentConformance(options = {}) {
+  const declared = getSiteAgentConformance(options.manifest);
+  const proofs = [];
+  if (!declared.valid) return { ...declared, proofs, executionVerified: false, fullyConformant: false };
+  if (typeof options.createAgent !== "function") {
+    return {
+      ...declared,
+      errors: [...declared.errors, "Executable conformance requires createAgent."],
+      proofs,
+      executionVerified: false,
+      fullyConformant: false,
+    };
+  }
+
+  const agent = await options.createAgent({ permissions: "authorized" });
+  const deniedAgent = await options.createAgent({ permissions: "denied" });
+  const cases = options.cases || {};
+
+  await runProof(proofs, "core.permission-filtering", "core", async () => {
+    const authorized = await agent.getCapabilities();
+    const denied = await deniedAgent.getCapabilities();
+    if ((authorized.actions?.length || 0) <= (denied.actions?.length || 0)) throw new Error("permission-filtering-not-proven");
+  });
+
+  await runProof(proofs, "core.public-discovery-redaction", "core", async () => {
+    const publicManifest = createPublicDiscoveryManifest(options.manifest);
+    const serialized = JSON.stringify(publicManifest);
+    if (publicManifest.actions?.some(({ visibility }) => visibility !== "public")) throw new Error("private-action-exposed");
+    if (/selector|firestorePath|storagePath|documentPath|collectionPath|credential/i.test(serialized)) {
+      throw new Error("private-implementation-detail-exposed");
+    }
+  });
+
+  if (declared.profiles.query) {
+    await runProof(proofs, "query.structured-read", "query", async () => {
+      const testCase = requireCase(cases, "query");
+      const result = await agent.query(testCase.request);
+      if (!Array.isArray(result.items) || !result.status) throw new Error("query-result-not-structured");
+      const destination = result.items.find(({ destination }) => destination)?.destination;
+      if (destination && declared.profiles.navigation) {
+        const navigation = await agent.navigate(destination);
+        if (navigation.exact !== true || navigation.visible !== true) throw new Error("query-destination-not-navigable");
+      }
+      if (typeof testCase.verify === "function") await testCase.verify(result);
+    });
+
+    await runProof(proofs, "query.malformed-input-rejected", "query", async () => {
+      const testCase = requireCase(cases, "invalidQuery");
+      await agent.query(testCase.request)
+        .then(() => { throw new Error("malformed-query-accepted"); }, (error) => {
+          if (!String(error?.message).includes("schema-invalid")) throw error;
+        });
+    });
+  }
+
+  if (declared.profiles.navigation) {
+    await runProof(proofs, "navigation.exact-target", "navigation", async () => {
+      const testCase = requireCase(cases, "navigation");
+      const result = await agent.navigate(testCase.intent);
+      if (result.exact !== true || result.visible !== true) throw new Error("exact-visible-target-not-proven");
+      if (typeof testCase.verify === "function") await testCase.verify(result);
+    });
+  }
+
+  if (declared.profiles.action) {
+    await runProof(proofs, "action.prepare-confirm-requery", "action", async () => {
+      const testCase = requireCase(cases, "action");
+      const plan = await agent.prepareAction(testCase.prepare);
+      const result = await agent.confirmAction({
+        actionId: plan.actionId,
+        planId: plan.planId,
+        confirmation: testCase.confirmation,
+      });
+      if (!new Set(["confirmed", "already-applied", "working"]).has(result.status)) throw new Error("action-not-completed");
+      await agent.confirmAction({ actionId: plan.actionId, planId: plan.planId, confirmation: testCase.confirmation })
+        .then(() => { throw new Error("duplicate-confirmation-accepted"); }, (error) => {
+          if (!String(error?.message).includes("already-consumed")) throw error;
+        });
+      if (testCase.requery) await agent.query(testCase.requery);
+      if (typeof testCase.verify === "function") await testCase.verify(result);
+    });
+
+    await runProof(proofs, "action.reconciliation", "action", async () => {
+      const testCase = requireCase(cases, "reconciliation");
+      const reconciliationAgent = typeof testCase.createAgent === "function"
+        ? await testCase.createAgent()
+        : agent;
+      const plan = await reconciliationAgent.prepareAction(testCase.prepare);
+      if (typeof testCase.mutate === "function") await testCase.mutate();
+      const result = await reconciliationAgent.confirmAction({
+        actionId: plan.actionId,
+        planId: plan.planId,
+        confirmation: testCase.confirmation,
+      });
+      if (!new Set(["already-applied", "reconfirmation-required"]).has(result.status)) {
+        throw new Error("reconciliation-not-proven");
+      }
+    });
+
+    await runProof(proofs, "action.expired-plan", "action", async () => {
+      const testCase = requireCase(cases, "expiredAction");
+      const expiredAgent = await testCase.createAgent();
+      const plan = await expiredAgent.prepareAction(testCase.prepare);
+      await expiredAgent.confirmAction({
+        actionId: plan.actionId,
+        planId: plan.planId,
+        confirmation: testCase.confirmation,
+      }).then(() => { throw new Error("expired-plan-accepted"); }, (error) => {
+        if (!String(error?.message).includes("plan-expired")) throw error;
+      });
+    });
+  }
+
+  await runProof(proofs, "permission.denial", "core", async () => {
+    const testCase = requireCase(cases, "denial");
+    const method = deniedAgent[testCase.method];
+    if (typeof method !== "function") throw new Error("denial-method-invalid");
+    await method.call(deniedAgent, testCase.request)
+      .then(() => { throw new Error("permission-denial-not-enforced"); }, (error) => {
+        if (!String(error?.message).includes("not-authorized")) throw error;
+      });
+  });
+
+  const executionVerified = proofs.length > 0 && proofs.every(({ status }) => status === "passed");
+  return {
+    ...declared,
+    proofs,
+    executionVerified,
+    fullyConformant: declared.declaredComplete && executionVerified,
+    errors: [...declared.errors, ...proofs.filter(({ status }) => status === "failed").map(({ id, failureCode }) => `${id}: ${failureCode}`)],
+  };
+}

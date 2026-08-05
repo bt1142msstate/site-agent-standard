@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/bt1142msstate/site-agent-standard/raw/main/spec/0.2/schemas/query.schema.json",
+  "$defs": {
+    "resource": {
+      "type": "object",
+      "required": ["id", "description", "visibility", "execution", "modes", "filters", "resultSchema", "pagination", "freshness"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$" },
+        "title": { "type": "string", "minLength": 1 },
+        "description": { "type": "string", "minLength": 8 },
+        "visibility": { "enum": ["public", "authenticated"] },
+        "permissionsAll": { "type": "array", "uniqueItems": true, "items": { "type": "string" } },
+        "permissionsAny": { "type": "array", "uniqueItems": true, "items": { "type": "string" } },
+        "status": { "enum": ["active", "deprecated", "sunset"] },
+        "replacedBy": { "type": "string" },
+        "sunsetAt": { "type": "string", "format": "date-time" },
+        "execution": { "enum": ["local", "host"] },
+        "modes": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string" } },
+        "filters": { "type": "object", "additionalProperties": { "type": "object" } },
+        "sorts": { "type": "array", "uniqueItems": true, "items": { "type": "string" } },
+        "maxResults": { "type": "integer", "minimum": 1, "maximum": 1000 },
+        "resultSchema": { "type": "object" },
+        "pagination": {
+          "type": "object",
+          "required": ["style"],
+          "properties": {
+            "style": { "enum": ["none", "cursor"] },
+            "defaultLimit": { "type": "integer", "minimum": 1, "maximum": 1000 },
+            "maxLimit": { "type": "integer", "minimum": 1, "maximum": 1000 }
+          },
+          "additionalProperties": false
+        },
+        "freshness": {
+          "type": "object",
+          "required": ["mode"],
+          "properties": {
+            "mode": { "enum": ["static", "snapshot", "live"] },
+            "maxAgeSeconds": { "type": "integer", "minimum": 0 },
+            "eventIds": { "type": "array", "uniqueItems": true, "items": { "type": "string" } }
+          },
+          "additionalProperties": false
+        },
+        "aggregations": { "type": "object", "additionalProperties": { "type": "object" } },
+        "relationships": { "type": "array", "uniqueItems": true, "items": { "type": "string" } },
+        "destinationId": { "type": "string" }
+      },
+      "patternProperties": { "^x-[a-z0-9._-]+$": true },
+      "additionalProperties": false
+    }
+  }
+}

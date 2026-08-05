@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/bt1142msstate/site-agent-standard/raw/main/spec/0.2/schemas/navigation.schema.json",
+  "$defs": {
+    "destination": {
+      "type": "object",
+      "required": ["id", "description", "visibility", "route", "precision", "exact", "targetKinds", "stateSchema"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$" },
+        "title": { "type": "string", "minLength": 1 },
+        "description": { "type": "string", "minLength": 8 },
+        "visibility": { "enum": ["public", "authenticated"] },
+        "permissionsAll": { "type": "array", "uniqueItems": true, "items": { "type": "string" } },
+        "permissionsAny": { "type": "array", "uniqueItems": true, "items": { "type": "string" } },
+        "status": { "enum": ["active", "deprecated", "sunset"] },
+        "replacedBy": { "type": "string" },
+        "sunsetAt": { "type": "string", "format": "date-time" },
+        "route": { "type": "string", "pattern": "^/" },
+        "precision": { "enum": ["control", "field", "record", "record-page", "surface"] },
+        "exact": { "const": true },
+        "targetKinds": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string" } },
+        "stateSchema": { "type": "object" }
+      },
+      "patternProperties": { "^x-[a-z0-9._-]+$": true },
+      "additionalProperties": false
+    }
+  }
+}

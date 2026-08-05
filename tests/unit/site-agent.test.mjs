@@ -63,9 +63,10 @@ function manifest() {
   };
 }
 
-test("validates all profiles and reports full conformance", () => {
+test("validates all profiles but requires executable evidence for full conformance", () => {
   assert.deepEqual(validateSiteAgentManifest(manifest()), { valid: true, errors: [] });
-  assert.equal(getSiteAgentConformance(manifest()).fullyConformant, true);
+  assert.equal(getSiteAgentConformance(manifest()).declaredComplete, true);
+  assert.equal(getSiteAgentConformance(manifest()).fullyConformant, false);
 });
 
 test("rejects broad navigation targets and unconfirmed writes", () => {
@@ -165,7 +166,8 @@ test("returns a replacement preview for a meaningful concurrent conflict", async
       },
     },
   });
-  const result = await agent.confirmAction({ actionId: "records.archive", planId: "old-plan" });
+  const plan = await agent.prepareAction({ actionId: "records.archive", input: { reference: "opaque" } });
+  const result = await agent.confirmAction({ actionId: "records.archive", planId: plan.planId });
   assert.equal(result.status, "reconfirmation-required");
   assert.equal(result.replacementPlan.planId, "new-plan");
 });

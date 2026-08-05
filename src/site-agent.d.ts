@@ -4,6 +4,8 @@ export type TargetPrecision = "control" | "field" | "record" | "record-page" | "
 export type ActionRisk = "read" | "reversible" | "consequential" | "destructive";
 export type ConfirmationKind = "none" | "explicit" | "typed";
 export type ActionReconciliationStatus = "confirmed" | "already-applied" | "reconfirmation-required";
+export type CapabilityStatus = "active" | "deprecated" | "sunset";
+export type TaskSupport = "forbidden" | "optional" | "required";
 
 export interface ActionReconciliationPolicy {
   identity: "stable-reference";
@@ -20,8 +22,12 @@ export interface PermissionContract {
 
 export interface SiteAgentCapability extends PermissionContract {
   id: string;
+  title?: string;
   description: string;
   visibility: CapabilityVisibility;
+  status?: CapabilityStatus;
+  replacedBy?: string;
+  sunsetAt?: string;
 }
 
 export interface QueryResource extends SiteAgentCapability {
@@ -31,6 +37,10 @@ export interface QueryResource extends SiteAgentCapability {
   sorts?: string[];
   maxResults?: number;
   resultSchema?: Record<string, unknown>;
+  pagination?: { style: "none" | "cursor"; defaultLimit?: number; maxLimit?: number };
+  freshness?: { mode: "static" | "snapshot" | "live"; maxAgeSeconds?: number; eventIds?: string[] };
+  aggregations?: Record<string, Record<string, unknown>>;
+  relationships?: string[];
   destinationId?: string;
 }
 
@@ -47,18 +57,42 @@ export interface SiteAction extends SiteAgentCapability {
   confirmation: ConfirmationKind;
   reconciliation: ActionReconciliationPolicy;
   inputSchema: Record<string, unknown>;
+  outputSchema?: Record<string, unknown>;
+  confirmationSchema?: Record<string, unknown>;
+  taskSupport?: TaskSupport;
+  sideEffects?: Array<"none" | "data" | "notification" | "file" | "financial" | "identity" | "external">;
+  openWorld?: boolean;
   destinationId?: string;
+}
+
+export interface SiteAgentEvent extends SiteAgentCapability {
+  payloadSchema: Record<string, unknown>;
+}
+
+export interface SiteAgentWorkflow extends SiteAgentCapability {
+  steps: Array<{
+    id: string;
+    capabilityId: string;
+    dependsOn?: string[];
+    onSuccess?: string;
+    onFailure?: string;
+  }>;
 }
 
 export interface SiteAgentManifest {
   $schema?: string;
-  standardVersion: "0.1";
+  standardVersion: "0.1" | "0.2";
+  manifestVersion?: string;
+  capabilityRevision?: string;
   id: string;
   name: string;
   profiles: SiteAgentProfile[];
   queryResources: QueryResource[];
   navigationDestinations: NavigationDestination[];
   actions: SiteAction[];
+  events?: SiteAgentEvent[];
+  workflows?: SiteAgentWorkflow[];
+  bindings?: Record<string, unknown>;
   conformance?: {
     claims?: SiteAgentProfile[];
     coverage?: { visibleSurfaces?: "complete" | "partial"; humanActions?: "complete" | "partial" };
@@ -84,6 +118,7 @@ export interface QueryRequest {
   filters?: Record<string, unknown>;
   sort?: string;
   limit?: number;
+  cursor?: string;
 }
 
 export interface QueryItem {
@@ -94,10 +129,15 @@ export interface QueryItem {
 }
 
 export interface QueryResult {
+  resourceId: string;
+  data: unknown;
   items: QueryItem[];
   mode: string;
   total: number;
   summary: string;
+  status: "succeeded" | "partial";
+  nextCursor: string | null;
+  asOf: string | null;
 }
 
 export interface ActionPlan {
@@ -111,45 +151,73 @@ export interface ActionPlan {
 }
 
 export interface ActionConfirmationResult {
-  status: ActionReconciliationStatus;
+  status: ActionReconciliationStatus | "working";
   reconciliation?: "unchanged" | "rebased" | "equivalent" | "conflicting" | "missing";
   replacementPlan?: ActionPlan;
   destination?: SemanticDestination | null;
 }
 
+export interface ActionTask {
+  taskId: string;
+  status: "working" | "completed" | "failed" | "canceled";
+  statusMessage?: string;
+  createdAt?: string;
+  lastUpdatedAt?: string;
+  output?: unknown;
+}
+
 export interface SiteAgentOptions {
   manifest: SiteAgentManifest;
+  getManifest?: () => SiteAgentManifest | Promise<SiteAgentManifest>;
+  subscribeCapabilities?: (listener: () => void) => (() => void) | { unsubscribe(): void } | Promise<(() => void) | { unsubscribe(): void }>;
   context?: SiteAgentContext;
   getContext?: () => SiteAgentContext | Promise<SiteAgentContext>;
   adapters: {
-    query?: { execute(input: unknown): unknown | Promise<unknown> } | ((input: unknown) => unknown | Promise<unknown>);
+    query?: {
+      execute(input: unknown): unknown | Promise<unknown>;
+      subscribe?(input: unknown): unknown | Promise<unknown>;
+    } | ((input: unknown) => unknown | Promise<unknown>);
     navigation?: { navigate(input: unknown): unknown | Promise<unknown> } | ((input: unknown) => unknown | Promise<unknown>);
     action?: {
       prepare(input: unknown): unknown | Promise<unknown>;
       confirm(input: unknown): unknown | Promise<unknown>;
       cancel(input: unknown): unknown | Promise<unknown>;
+      getTask?(input: unknown): unknown | Promise<unknown>;
+      cancelTask?(input: unknown): unknown | Promise<unknown>;
     };
   };
   report?: (event: { profile: string; capabilityId: string; status: string; durationMs: number; failureCode: string }) => void;
 }
 
-export declare const SITE_AGENT_STANDARD_VERSION: "0.1";
+export declare const SITE_AGENT_STANDARD_VERSION: "0.2";
+export declare const SITE_AGENT_SUPPORTED_VERSIONS: readonly ["0.1", "0.2"];
 export declare const SITE_AGENT_PROFILES: readonly SiteAgentProfile[];
+export declare function negotiateSiteAgentVersion(
+  offeredVersions: string | string[],
+  supportedVersions?: readonly string[],
+): string | null;
 export declare function validateSiteAgentManifest(manifest: unknown, options?: { publicDocument?: boolean }): { valid: boolean; errors: string[] };
 export declare function assertSiteAgentManifest(manifest: unknown, options?: { publicDocument?: boolean }): SiteAgentManifest;
 export declare function isCapabilityAuthorized(capability: SiteAgentCapability, context: SiteAgentContext): boolean;
 export declare function filterSiteAgentManifest(manifest: SiteAgentManifest, context: SiteAgentContext, options?: { stripExtensions?: boolean }): SiteAgentManifest;
 export declare function createPublicDiscoveryManifest(manifest: SiteAgentManifest): SiteAgentManifest;
-export declare function getSiteAgentConformance(manifest: SiteAgentManifest): { valid: boolean; errors: string[]; profiles: Record<SiteAgentProfile, boolean>; coverage: Record<string, string>; fullyConformant: boolean };
+export declare function getSiteAgentConformance(manifest: SiteAgentManifest): { valid: boolean; errors: string[]; profiles: Record<SiteAgentProfile, boolean>; coverage: Record<string, string>; declaredComplete: boolean; executionVerified: false; fullyConformant: false };
 export declare function createSiteAgent(options: SiteAgentOptions): {
   manifest: SiteAgentManifest;
   getConformance(): ReturnType<typeof getSiteAgentConformance>;
+  getCurrentConformance(): Promise<ReturnType<typeof getSiteAgentConformance>>;
   getCapabilities(): Promise<SiteAgentManifest>;
+  subscribeCapabilities(listener: (manifest: SiteAgentManifest) => void): Promise<{ unsubscribe(): void }>;
   query(request: QueryRequest): Promise<QueryResult>;
+  subscribe(request: QueryRequest, listener: (event: unknown) => void): Promise<{ unsubscribe(): void }>;
   navigate(intent: SemanticDestination): Promise<unknown>;
   prepareAction(request: { actionId: string; input?: unknown; target?: unknown }): Promise<ActionPlan>;
   confirmAction(request: { actionId: string; planId: string; confirmation?: unknown }): Promise<unknown>;
   cancelAction(request: { actionId: string; planId: string }): Promise<unknown>;
+  getTask(request: { actionId: string; taskId: string }): Promise<ActionTask>;
+  cancelTask(request: { actionId: string; taskId: string }): Promise<ActionTask>;
 };
 
 export * from "./site-navigator.js";
+export * from "./bindings.js";
+export * from "./conformance.js";

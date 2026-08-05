@@ -1,6 +1,8 @@
 {
-  "$schema": "../../spec/0.1/schemas/manifest.schema.json",
-  "standardVersion": "0.1",
+  "$schema": "../../spec/0.2/schemas/manifest.schema.json",
+  "standardVersion": "0.2",
+  "manifestVersion": "1.0.0",
+  "capabilityRevision": "example-orders-1",
   "id": "example.orders",
   "name": "Example order site",
   "profiles": ["core", "query", "navigation", "action"],
@@ -19,6 +21,32 @@
       },
       "sorts": ["newest", "oldest"],
       "maxResults": 50,
+      "pagination": { "style": "cursor", "defaultLimit": 25, "maxLimit": 50 },
+      "freshness": { "mode": "snapshot", "maxAgeSeconds": 30 },
+      "resultSchema": {
+        "type": "object",
+        "required": ["items", "total"],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["reference", "label", "fields"],
+              "properties": {
+                "reference": { "type": "string" },
+                "label": { "type": "string" },
+                "fields": { "type": "object" }
+              },
+              "additionalProperties": true
+            }
+          },
+          "total": { "type": "integer", "minimum": 0 },
+          "summary": { "type": "string" },
+          "nextCursor": { "type": "string" },
+          "asOf": { "type": "string" }
+        },
+        "additionalProperties": true
+      },
       "destinationId": "orders.detail"
     }
   ],
@@ -34,7 +62,8 @@
       "targetKinds": ["order"],
       "stateSchema": {
         "type": "object",
-        "properties": { "period": { "type": "string" }, "status": { "type": "string" } }
+        "properties": { "period": { "type": "string" }, "status": { "type": "string" } },
+        "additionalProperties": false
       }
     }
   ],
@@ -59,9 +88,50 @@
         "properties": { "orderReference": { "type": "string" } },
         "additionalProperties": false
       },
+      "outputSchema": {
+        "type": "object",
+        "required": ["archived"],
+        "properties": { "archived": { "type": "boolean" } },
+        "additionalProperties": false
+      },
+      "taskSupport": "forbidden",
+      "sideEffects": ["data"],
       "destinationId": "orders.detail"
     }
   ],
+  "events": [
+    {
+      "id": "orders.changed",
+      "description": "Signals that an authorized order projection changed",
+      "visibility": "authenticated",
+      "permissionsAll": ["orders.view"],
+      "payloadSchema": {
+        "type": "object",
+        "required": ["reference"],
+        "properties": { "reference": { "type": "string" } },
+        "additionalProperties": false
+      }
+    }
+  ],
+  "workflows": [
+    {
+      "id": "orders.review-and-archive",
+      "description": "Review an order and archive it after explicit confirmation",
+      "visibility": "authenticated",
+      "permissionsAll": ["orders.manage"],
+      "steps": [
+        { "id": "find", "capabilityId": "orders" },
+        { "id": "show", "capabilityId": "orders.detail", "dependsOn": ["find"] },
+        { "id": "archive", "capabilityId": "orders.archive", "dependsOn": ["show"] }
+      ]
+    }
+  ],
+  "bindings": {
+    "mcp": { "enabled": true },
+    "webmcp": { "enabled": true },
+    "arazzo": { "enabled": true },
+    "asyncapi": { "enabled": true }
+  },
   "conformance": {
     "claims": ["core", "query", "navigation", "action"],
     "coverage": { "visibleSurfaces": "complete", "humanActions": "complete" }

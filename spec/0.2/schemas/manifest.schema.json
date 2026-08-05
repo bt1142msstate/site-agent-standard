@@ -1,0 +1,99 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/bt1142msstate/site-agent-standard/raw/main/spec/0.2/schemas/manifest.schema.json",
+  "title": "Site Agent manifest 0.2",
+  "type": "object",
+  "required": ["standardVersion", "manifestVersion", "capabilityRevision", "id", "name", "profiles", "queryResources", "navigationDestinations", "actions"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "standardVersion": { "const": "0.2" },
+    "manifestVersion": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+    "capabilityRevision": { "type": "string", "minLength": 1 },
+    "id": { "type": "string", "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$" },
+    "name": { "type": "string", "minLength": 1 },
+    "profiles": {
+      "type": "array",
+      "uniqueItems": true,
+      "contains": { "const": "core" },
+      "items": { "enum": ["core", "query", "navigation", "action"] }
+    },
+    "queryResources": { "type": "array", "items": { "$ref": "query.schema.json#/$defs/resource" } },
+    "navigationDestinations": { "type": "array", "items": { "$ref": "navigation.schema.json#/$defs/destination" } },
+    "actions": { "type": "array", "items": { "$ref": "action.schema.json#/$defs/action" } },
+    "events": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "description", "visibility", "payloadSchema"],
+        "properties": {
+          "id": { "type": "string" },
+          "title": { "type": "string" },
+          "description": { "type": "string", "minLength": 8 },
+          "visibility": { "enum": ["public", "authenticated"] },
+          "permissionsAll": { "type": "array", "items": { "type": "string" } },
+          "permissionsAny": { "type": "array", "items": { "type": "string" } },
+          "status": { "enum": ["active", "deprecated", "sunset"] },
+          "replacedBy": { "type": "string" },
+          "sunsetAt": { "type": "string", "format": "date-time" },
+          "payloadSchema": { "type": "object" }
+        },
+        "patternProperties": { "^x-[a-z0-9._-]+$": true },
+        "additionalProperties": false
+      }
+    },
+    "workflows": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "description", "visibility", "steps"],
+        "properties": {
+          "id": { "type": "string" },
+          "title": { "type": "string" },
+          "description": { "type": "string", "minLength": 8 },
+          "visibility": { "enum": ["public", "authenticated"] },
+          "permissionsAll": { "type": "array", "items": { "type": "string" } },
+          "permissionsAny": { "type": "array", "items": { "type": "string" } },
+          "status": { "enum": ["active", "deprecated", "sunset"] },
+          "replacedBy": { "type": "string" },
+          "sunsetAt": { "type": "string", "format": "date-time" },
+          "steps": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "required": ["id", "capabilityId"],
+              "properties": {
+                "id": { "type": "string" },
+                "capabilityId": { "type": "string" },
+                "dependsOn": { "type": "array", "items": { "type": "string" } },
+                "onSuccess": { "type": "string" },
+                "onFailure": { "type": "string" }
+              },
+              "additionalProperties": false
+            }
+          }
+        },
+        "patternProperties": { "^x-[a-z0-9._-]+$": true },
+        "additionalProperties": false
+      }
+    },
+    "bindings": { "type": "object" },
+    "conformance": {
+      "type": "object",
+      "properties": {
+        "claims": { "type": "array", "uniqueItems": true, "items": { "enum": ["core", "query", "navigation", "action"] } },
+        "coverage": {
+          "type": "object",
+          "properties": {
+            "visibleSurfaces": { "enum": ["complete", "partial"] },
+            "humanActions": { "enum": ["complete", "partial"] }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "patternProperties": { "^x-[a-z0-9._-]+$": true },
+  "additionalProperties": false
+}

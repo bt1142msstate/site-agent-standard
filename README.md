@@ -15,14 +15,14 @@ profiles without collapsing them into one unsafe API:
 - **Action** previews, confirms, executes, audits, and verifies changes through
   the site's authoritative domain handlers.
 
-The repository includes the normative 0.1 draft, a dependency-free reference
-runtime, a CLI conformance checker, and the battle-tested Site Navigator engine
-as the Navigation profile implementation.
+The repository includes the normative 0.2 draft, a schema-validating reference
+runtime, executable CLI conformance proofs, MCP/WebMCP/Arazzo/AsyncAPI bindings,
+and the battle-tested Site Navigator engine as the Navigation implementation.
 
 ## Install
 
 ```bash
-npm install github:bt1142msstate/site-agent-standard#v0.5.0
+npm install github:bt1142msstate/site-agent-standard#v0.6.0
 ```
 
 ```js
@@ -36,9 +36,13 @@ Version `0.4.0` intentionally renames the package from
 `@bt1142msstate/site-navigator`. Existing `v0.3.1` and older tags retain their
 original package identity.
 
-Version `0.5.0` adds the Action reconciliation contract. Implementations
+Version `0.5.0` added the Action reconciliation contract. Implementations
 distinguish equivalent, safely rebaseable, conflicting, and missing targets
 instead of treating every revision change as a failed action.
+
+Version `0.6.0` adds the 0.2 draft: runtime JSON Schema enforcement, cursor and
+freshness semantics, live Query subscriptions, durable Action tasks, capability
+lifecycle metadata, executable conformance evidence, and standard bindings.
 
 ## Publish a manifest
 
@@ -148,9 +152,13 @@ target is not covered.
 
 ```bash
 site-agent validate ./site-agent.json
-site-agent test ./site-agent.json
+site-agent test ./site-agent.json --adapter ./site-agent.conformance.mjs
 npm run check
 ```
+
+`validate` checks structure. `test` only reports full conformance after the host
+adapter executes Query, Navigation, Action, denial, reconciliation, and lifecycle
+proofs. A manifest's coverage declaration is not accepted as test evidence.
 
 The browser suite runs deliberately difficult synthetic layouts at desktop,
 tablet-touch, and mobile-touch sizes. A conforming host should additionally
@@ -166,6 +174,25 @@ duplicate confirmation, and sanitized telemetry.
 - The navigator works within one document. Cross-origin frames remain isolated
   by browser security.
 - Closed shadow roots require their component to expose a target or adapter.
+
+## Interoperability bindings
+
+```js
+import {
+  createArazzoBinding,
+  createAsyncApiBinding,
+  createMcpBinding,
+  registerWebMcpTools,
+} from "@bt1142msstate/site-agent-standard/bindings";
+```
+
+Bindings project the same permission-filtered semantic contract into established
+protocols. They never expose selectors or storage paths and cannot bypass the
+Action prepare/confirmation lifecycle.
+
+`createArazzoBinding` requires valid OpenAPI, AsyncAPI, or Arazzo source
+descriptions and an explicit capability-to-operation mapping. It intentionally
+refuses to invent operations that are absent from the source API description.
 
 ## Contributing and security
 
