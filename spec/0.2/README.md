@@ -14,7 +14,8 @@ database schema, or a required browser or network transport.
   telemetry.
 - **Query** defines schema-validated, bounded reads with opaque cursor
   pagination, freshness, aggregation declarations, relationships, and optional
-  live subscriptions.
+  live subscriptions. Local static resources also declare how their content is
+  materialized and prove parity with the reachable user surface.
 - **Navigation** atomically applies declared state and verifies the smallest
   exact visible target without an inferred DOM fallback.
 - **Action** defines schema-validated prepare, confirm, cancel, reconciliation,
@@ -43,6 +44,21 @@ confirmations, completed Action outputs, event payloads, and durable-task
 outputs MUST validate against their JSON Schema 2020-12 declarations at the
 host boundary. A model-generated value is never trusted merely because it came
 from structured output.
+
+## Materialized user content
+
+A local static Query resource MUST declare its materialization basis, stage,
+surface-parity requirement, and nested-content behavior. A resource based on a
+rendered user surface MUST be extracted only after templates, includes,
+components, and declared reachable UI state are assembled. Raw wrapper files,
+unexpanded fragments, and source placeholders are not the user surface and MUST
+NOT be treated as complete query evidence.
+
+Conformance compares normalized materialized content with the host's rendered
+or accessibility-supported user surface. Sites MAY instead declare a canonical
+structured source or readable document text when that source is authoritative;
+if the same facts are also shown in the UI, the host still declares and proves
+surface parity. The standard does not require runtime browser scraping.
 
 ## Action reconciliation
 

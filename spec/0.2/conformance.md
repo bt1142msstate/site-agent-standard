@@ -21,24 +21,28 @@ The CLI MUST NOT report full conformance without an executable adapter.
    prove that declarations do not grant authority.
 2. Query structured data, enforce filter and result schemas, exercise bounded
    pagination where declared, and navigate to the returned exact destination.
-3. Apply and verify all Navigation state before resolving, revealing, focusing,
+3. For every local static Query resource, materialize content from its declared
+   basis and prove that nested templates/components are resolved. When surface
+   parity is required, compare normalized facts against every declared reachable
+   rendered state; raw wrapper fragments are not valid evidence.
+4. Apply and verify all Navigation state before resolving, revealing, focusing,
    and highlighting the smallest target at desktop, tablet-touch, and
    mobile-touch sizes.
-4. Prepare and confirm an Action, reject duplicate confirmation, validate the
+5. Prepare and confirm an Action, reject duplicate confirmation, validate the
    completed output, requery affected state, and navigate to the result.
-5. Reconcile equivalent and non-conflicting changes, require a replacement
+6. Reconcile equivalent and non-conflicting changes, require a replacement
    preview for a meaningful conflict, and reject expired or unauthorized plans
    without partial effects.
-6. For durable Actions, prove progress/result retrieval, cancellation, terminal
+7. For durable Actions, prove progress/result retrieval, cancellation, terminal
    state stability, current authorization, and opaque cursor/task identifiers.
-7. For live Queries, prove subscription authorization, event schema validation,
+8. For live Queries, prove subscription authorization, event schema validation,
    reconnect/cleanup behavior, and bounded resource use.
-8. Reject malformed, sunset, unknown, over-broad, and permission-denied
+9. Reject malformed, sunset, unknown, over-broad, and permission-denied
    capabilities before invoking a host mutation.
-9. Verify public discovery and every generated binding contain no authenticated
+10. Verify public discovery and every generated binding contain no authenticated
    capability, private extension, selector, storage path, database path,
    credential, private identifier, or tested record content.
-10. When Presentation is claimed, prove cursor travel before action, exact
+11. When Presentation is claimed, prove cursor travel before action, exact
     target framing, hotspot/ripple anchoring, visible typing events, mute,
     reduced motion, cleanup, and desktop plus touch-mobile rendering.
 

@@ -59,6 +59,16 @@ export async function runSiteAgentConformance(options = {}) {
   });
 
   if (declared.profiles.query) {
+    const materializedResources = (options.manifest.queryResources || [])
+      .filter(({ execution, freshness }) => execution === "local" && freshness?.mode === "static");
+    if (materializedResources.length) {
+      await runProof(proofs, "query.materialized-surface-parity", "query", async () => {
+        const testCase = requireCase(cases, "materialization");
+        if (typeof testCase.verify !== "function") throw new Error("materialization-verifier-required");
+        const result = await testCase.verify({ resources: materializedResources });
+        if (result !== true) throw new Error("materialized-surface-parity-not-proven");
+      });
+    }
     await runProof(proofs, "query.structured-read", "query", async () => {
       const testCase = requireCase(cases, "query");
       const result = await agent.query(testCase.request);

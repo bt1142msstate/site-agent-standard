@@ -41,11 +41,53 @@
           },
           "additionalProperties": false
         },
+        "materialization": {
+          "type": "object",
+          "required": ["basis", "stage", "surfaceParity", "nestedContent"],
+          "properties": {
+            "basis": { "enum": ["rendered-user-surface", "canonical-structured-source", "document-text", "external"] },
+            "stage": { "enum": ["build", "runtime", "request"] },
+            "surfaceParity": { "enum": ["required", "not-applicable"] },
+            "nestedContent": { "enum": ["resolved", "not-applicable"] }
+          },
+          "additionalProperties": false
+        },
         "aggregations": { "type": "object", "additionalProperties": { "type": "object" } },
         "relationships": { "type": "array", "uniqueItems": true, "items": { "type": "string" } },
         "destinationId": { "type": "string" }
       },
       "patternProperties": { "^x-[a-z0-9._-]+$": true },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "execution": { "const": "local" },
+              "freshness": { "type": "object", "properties": { "mode": { "const": "static" } }, "required": ["mode"] }
+            },
+            "required": ["execution", "freshness"]
+          },
+          "then": { "properties": { "materialization": {} }, "required": ["materialization"] }
+        },
+        {
+          "if": {
+            "properties": {
+              "materialization": { "type": "object", "properties": { "basis": { "const": "rendered-user-surface" } }, "required": ["basis"] }
+            },
+            "required": ["materialization"]
+          },
+          "then": {
+            "properties": {
+              "materialization": {
+                "type": "object",
+                "properties": {
+                  "surfaceParity": { "const": "required" },
+                  "nestedContent": { "const": "resolved" }
+                }
+              }
+            }
+          }
+        }
+      ],
       "additionalProperties": false
     }
   }

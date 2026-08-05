@@ -18,6 +18,8 @@ const visibilities = new Set(["public", "authenticated"]);
 const lifecycleStatuses = new Set(["active", "deprecated", "sunset"]);
 const taskSupportValues = new Set(["forbidden", "optional", "required"]);
 const freshnessModes = new Set(["static", "snapshot", "live"]);
+const materializationBases = new Set(["rendered-user-surface", "canonical-structured-source", "document-text", "external"]);
+const materializationStages = new Set(["build", "runtime", "request"]);
 const reconciliationValues = Object.freeze({
   identity: new Set(["stable-reference"]),
   equivalent: new Set(["complete"]),
@@ -161,6 +163,21 @@ function validateManifestInternal(manifest, options = {}) {
       }
       if (!isObject(resource.freshness) || !freshnessModes.has(resource.freshness.mode)) {
         errors.push(`${path}.freshness.mode must be static, snapshot, or live for standardVersion 0.2.`);
+      }
+      if (resource.execution === "local" && resource.freshness?.mode === "static") {
+        const materialization = resource.materialization;
+        if (!isObject(materialization)) {
+          errors.push(`${path}.materialization is required for a local static Query resource.`);
+        } else {
+          if (!materializationBases.has(materialization.basis)) errors.push(`${path}.materialization.basis is invalid.`);
+          if (!materializationStages.has(materialization.stage)) errors.push(`${path}.materialization.stage is invalid.`);
+          if (!new Set(["required", "not-applicable"]).has(materialization.surfaceParity)) errors.push(`${path}.materialization.surfaceParity is invalid.`);
+          if (!new Set(["resolved", "not-applicable"]).has(materialization.nestedContent)) errors.push(`${path}.materialization.nestedContent is invalid.`);
+          if (materialization.basis === "rendered-user-surface"
+            && (materialization.surfaceParity !== "required" || materialization.nestedContent !== "resolved")) {
+            errors.push(`${path}.materialization must require surface parity and resolved nested content for rendered user surfaces.`);
+          }
+        }
       }
     }
   });

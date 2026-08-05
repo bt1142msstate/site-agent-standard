@@ -27,6 +27,29 @@ test("0.2 validates declared schemas and lifecycle metadata", () => {
   assert.equal(negotiateSiteAgentVersion(["9.0"]), null);
 });
 
+test("local static Query resources require materialized user-surface provenance", () => {
+  const manifest = example();
+  manifest.queryResources.push({
+    id: "public-copy",
+    description: "Materialized public page copy",
+    visibility: "public",
+    execution: "local",
+    modes: ["records"],
+    filters: { query: { type: "string" } },
+    resultSchema: { type: "object" },
+    pagination: { style: "none" },
+    freshness: { mode: "static" },
+  });
+  assert.match(validateSiteAgentManifest(manifest).errors.join("\n"), /materialization is required/);
+  manifest.queryResources.at(-1).materialization = {
+    basis: "rendered-user-surface",
+    stage: "build",
+    surfaceParity: "required",
+    nestedContent: "resolved",
+  };
+  assert.equal(validateSiteAgentManifest(manifest).valid, true);
+});
+
 test("0.2 rejects broken event, relationship, replacement, and workflow references", () => {
   const manifest = example();
   manifest.queryResources[0].freshness.eventIds = ["missing.event"];

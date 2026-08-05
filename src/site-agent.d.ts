@@ -39,6 +39,12 @@ export interface QueryResource extends SiteAgentCapability {
   resultSchema?: Record<string, unknown>;
   pagination?: { style: "none" | "cursor"; defaultLimit?: number; maxLimit?: number };
   freshness?: { mode: "static" | "snapshot" | "live"; maxAgeSeconds?: number; eventIds?: string[] };
+  materialization?: {
+    basis: "rendered-user-surface" | "canonical-structured-source" | "document-text" | "external";
+    stage: "build" | "runtime" | "request";
+    surfaceParity: "required" | "not-applicable";
+    nestedContent: "resolved" | "not-applicable";
+  };
   aggregations?: Record<string, Record<string, unknown>>;
   relationships?: string[];
   destinationId?: string;
