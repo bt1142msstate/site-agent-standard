@@ -45,6 +45,7 @@ export interface QueryResource extends SiteAgentCapability {
     stage: "build" | "runtime" | "request";
     surfaceParity: "required" | "not-applicable";
     nestedContent: "resolved" | "not-applicable";
+    nestedDestination: "exact-reveal-required" | "not-applicable";
   };
   aggregations?: Record<string, Record<string, unknown>>;
   relationships?: string[];
@@ -57,6 +58,17 @@ export interface NavigationDestination extends SiteAgentCapability {
   exact: true;
   targetKinds: string[];
   stateSchema?: Record<string, unknown>;
+  reveal?: {
+    mode: "nested";
+    steps: Array<{
+      id: string;
+      kind: "route" | "state" | "nested-resource" | "target";
+      stateKeys?: string[];
+      targetKinds?: string[];
+    }>;
+    verification: "each-step-and-final-target";
+    outerSurfaceFallback: false;
+  };
   targetSelection?: {
     order: NavigationCandidatePrecision[];
     oversized: "next-declared-candidate";
@@ -140,6 +152,16 @@ export interface SemanticDestination {
   destinationId: string;
   state?: Record<string, unknown>;
   target?: { reference: string; kind?: string };
+}
+
+export interface NavigationOutcome {
+  exact: true;
+  visible: true;
+  targetKind?: string;
+  reveal?: {
+    complete: true;
+    verifiedSteps: string[];
+  };
 }
 
 export interface QueryRequest {

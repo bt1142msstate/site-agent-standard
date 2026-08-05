@@ -46,8 +46,107 @@ test("local static Query resources require materialized user-surface provenance"
     stage: "build",
     surfaceParity: "required",
     nestedContent: "resolved",
+    nestedDestination: "not-applicable",
   };
   assert.equal(validateSiteAgentManifest(manifest).valid, true);
+});
+
+function nestedDocumentManifest() {
+  const manifest = example();
+  manifest.queryResources.push({
+    id: "public-document-text",
+    description: "Materialized excerpts from a linked public document",
+    visibility: "public",
+    execution: "local",
+    modes: ["records"],
+    filters: { query: { type: "string" } },
+    resultSchema: { type: "object" },
+    pagination: { style: "none" },
+    freshness: { mode: "static" },
+    materialization: {
+      basis: "document-text",
+      stage: "build",
+      surfaceParity: "required",
+      nestedContent: "resolved",
+      nestedDestination: "exact-reveal-required",
+    },
+    destinationId: "public-document.excerpt",
+  });
+  manifest.navigationDestinations.push({
+    id: "public-document.excerpt",
+    description: "Open a linked document and reveal its exact source excerpt",
+    visibility: "public",
+    route: "/resources/documents/example/",
+    precision: "record-page",
+    exact: true,
+    targetKinds: ["document-segment"],
+    stateSchema: {
+      type: "object",
+      required: ["documentPage"],
+      properties: { documentPage: { type: "integer", minimum: 1 } },
+      additionalProperties: false,
+    },
+    reveal: {
+      mode: "nested",
+      steps: [
+        { id: "resource-route", kind: "route" },
+        { id: "document-page", kind: "state", stateKeys: ["documentPage"] },
+        { id: "document-content", kind: "nested-resource", targetKinds: ["document-text"] },
+        { id: "source-excerpt", kind: "target", targetKinds: ["document-segment"] },
+      ],
+      verification: "each-step-and-final-target",
+      outerSurfaceFallback: false,
+    },
+  });
+  return manifest;
+}
+
+test("nested document results require a complete exact reveal contract", async () => {
+  const manifest = nestedDocumentManifest();
+  assert.deepEqual(validateSiteAgentManifest(manifest), { valid: true, errors: [] });
+
+  const withoutReveal = nestedDocumentManifest();
+  delete withoutReveal.navigationDestinations.at(-1).reveal;
+  assert.match(validateSiteAgentManifest(withoutReveal).errors.join("\n"), /requires a nested reveal contract/);
+
+  const createNestedAgent = (destination, navigation) => createSiteAgent({
+    manifest,
+    context: { authenticated: false, permissions: [] },
+    adapters: {
+      query: async () => ({
+        items: [{ reference: "opaque-excerpt-1", label: "Tuition", fields: {}, destination }],
+        total: 1,
+      }),
+      navigation,
+    },
+  });
+  const exactDestination = {
+    destinationId: "public-document.excerpt",
+    state: { documentPage: 11 },
+    target: { reference: "opaque-excerpt-1", kind: "document-segment" },
+  };
+
+  const broadAgent = createNestedAgent({
+    ...exactDestination,
+    target: { reference: "opaque-document-1", kind: "document" },
+  }, async () => ({ exact: true, visible: true }));
+  await assert.rejects(broadAgent.query({ resourceId: "public-document-text" }), /target-kind-invalid/);
+
+  const unverifiedAgent = createNestedAgent(exactDestination, async () => ({ exact: true, visible: true }));
+  const result = await unverifiedAgent.query({ resourceId: "public-document-text" });
+  await assert.rejects(unverifiedAgent.navigate(result.items[0].destination), /reveal-not-complete/);
+
+  const verifiedAgent = createNestedAgent(exactDestination, async () => ({
+    exact: true,
+    visible: true,
+    targetKind: "document-segment",
+    reveal: {
+      complete: true,
+      verifiedSteps: ["resource-route", "document-page", "document-content", "source-excerpt"],
+    },
+  }));
+  const verifiedQuery = await verifiedAgent.query({ resourceId: "public-document-text" });
+  assert.equal((await verifiedAgent.navigate(verifiedQuery.items[0].destination)).visible, true);
 });
 
 test("0.2 rejects broken event, relationship, replacement, and workflow references", () => {
@@ -149,6 +248,13 @@ test("full conformance requires and records executable host proofs", async () =>
   assert.equal(result.executionVerified, true);
   assert.equal(result.proofs.length, 10);
   assert.ok(result.proofs.every(({ status }) => status === "passed"));
+});
+
+test("full conformance proves nested query destinations end at their exact source", async () => {
+  const manifest = nestedDocumentManifest();
+  const result = await runSiteAgentConformance({ manifest, ...createConformanceTarget(manifest) });
+  assert.equal(result.fullyConformant, true, JSON.stringify(result.errors));
+  assert.ok(result.proofs.some(({ id, status }) => id === "query.nested-destination-reveal" && status === "passed"));
 });
 
 test("dynamic capability revisions take effect without recreating the agent", async () => {

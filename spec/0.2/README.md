@@ -60,6 +60,29 @@ structured source or readable document text when that source is authoritative;
 if the same facts are also shown in the UI, the host still declares and proves
 surface parity. The standard does not require runtime browser scraping.
 
+### Nested result provenance and reveal
+
+When a Query result is sourced from content inside a linked document, viewer,
+disclosure, dialog, frame, or other nested surface, its materialization MUST set
+`nestedDestination` to `exact-reveal-required`. The referenced Navigation
+destination MUST declare an ordered host-adapter `reveal` path that begins at
+the route, includes the nested resource, and ends at an exact semantic target.
+Any semantic state needed to reveal the result, such as a document page,
+selected record, filter, range, tab, or open disclosure, is part of the same
+destination intent.
+
+The Query result MUST bind its source provenance to an opaque target reference
+and declared target kind. Navigation MUST apply and verify every reveal step
+before it reports the final target visible. Reaching the outer page, resource
+card, download link, viewer shell, or document cover does not satisfy the
+contract. An adapter MUST fail when it cannot reveal the exact nested source;
+it MUST NOT substitute an outer surface or inferred DOM text.
+
+Reveal declarations contain semantic step IDs, state keys, and target kinds.
+They never contain selectors, model-authored URLs, database paths, credentials,
+or document storage internals. Hosts remain responsible for mapping those
+semantic declarations to their own components and document viewers.
+
 ## Action reconciliation
 
 An Action plan retains semantic intent and a stable opaque target reference. At

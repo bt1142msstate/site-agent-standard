@@ -20,6 +20,8 @@ const taskSupportValues = new Set(["forbidden", "optional", "required"]);
 const freshnessModes = new Set(["static", "snapshot", "live"]);
 const materializationBases = new Set(["rendered-user-surface", "canonical-structured-source", "document-text", "external"]);
 const materializationStages = new Set(["build", "runtime", "request"]);
+const nestedDestinationModes = new Set(["exact-reveal-required", "not-applicable"]);
+const revealStepKinds = new Set(["route", "state", "nested-resource", "target"]);
 const reconciliationValues = Object.freeze({
   identity: new Set(["stable-reference"]),
   equivalent: new Set(["complete"]),
@@ -140,6 +142,38 @@ function validateManifestInternal(manifest, options = {}) {
     if (!precisions.has(destination.precision)) errors.push(`${path}.precision is invalid.`);
     if (destination.exact !== true) errors.push(`${path}.exact must be true; broad fallback targets do not conform.`);
     if (!Array.isArray(destination.targetKinds) || !destination.targetKinds.length) errors.push(`${path}.targetKinds must declare at least one semantic target.`);
+    if (destination.reveal !== undefined) {
+      const reveal = destination.reveal;
+      if (!isObject(reveal) || reveal.mode !== "nested") {
+        errors.push(`${path}.reveal.mode must be nested.`);
+      } else {
+        const steps = Array.isArray(reveal.steps) ? reveal.steps : [];
+        if (steps.length < 3) errors.push(`${path}.reveal.steps must declare a complete nested reveal path.`);
+        if (steps[0]?.kind !== "route") errors.push(`${path}.reveal.steps must begin with route.`);
+        if (steps.at(-1)?.kind !== "target") errors.push(`${path}.reveal.steps must end with target.`);
+        if (!steps.some(({ kind }) => kind === "nested-resource")) errors.push(`${path}.reveal.steps must include nested-resource.`);
+        const stepIds = new Set();
+        steps.forEach((step, stepIndex) => {
+          const stepPath = `${path}.reveal.steps[${stepIndex}]`;
+          if (!isObject(step) || !idPattern.test(String(step.id || ""))) errors.push(`${stepPath}.id is invalid.`);
+          if (stepIds.has(step.id)) errors.push(`${stepPath}.id is duplicated.`);
+          stepIds.add(step.id);
+          if (!revealStepKinds.has(step.kind)) errors.push(`${stepPath}.kind is invalid.`);
+          if (step.kind === "state") {
+            if (!Array.isArray(step.stateKeys) || !step.stateKeys.length) errors.push(`${stepPath}.stateKeys must not be empty.`);
+            for (const key of step.stateKeys || []) {
+              if (!Object.hasOwn(destination.stateSchema?.properties || {}, key)) errors.push(`${stepPath}.stateKeys references undeclared state ${key}.`);
+            }
+          }
+        });
+        const finalKinds = new Set(steps.at(-1)?.targetKinds || []);
+        if (!destination.targetKinds.some((kind) => finalKinds.has(kind))) {
+          errors.push(`${path}.reveal final targetKinds must include a declared destination target kind.`);
+        }
+        if (reveal.verification !== "each-step-and-final-target") errors.push(`${path}.reveal.verification is invalid.`);
+        if (reveal.outerSurfaceFallback !== false) errors.push(`${path}.reveal.outerSurfaceFallback must be false.`);
+      }
+    }
   });
 
   const queryIds = new Set();
@@ -173,12 +207,24 @@ function validateManifestInternal(manifest, options = {}) {
           if (!materializationStages.has(materialization.stage)) errors.push(`${path}.materialization.stage is invalid.`);
           if (!new Set(["required", "not-applicable"]).has(materialization.surfaceParity)) errors.push(`${path}.materialization.surfaceParity is invalid.`);
           if (!new Set(["resolved", "not-applicable"]).has(materialization.nestedContent)) errors.push(`${path}.materialization.nestedContent is invalid.`);
+          if (!nestedDestinationModes.has(materialization.nestedDestination)) errors.push(`${path}.materialization.nestedDestination is invalid.`);
           if (materialization.basis === "rendered-user-surface"
             && (materialization.surfaceParity !== "required" || materialization.nestedContent !== "resolved")) {
             errors.push(`${path}.materialization must require surface parity and resolved nested content for rendered user surfaces.`);
           }
+          if (materialization.nestedDestination === "exact-reveal-required" && materialization.nestedContent !== "resolved") {
+            errors.push(`${path}.materialization must resolve nested content before requiring an exact reveal destination.`);
+          }
         }
       }
+    }
+  });
+
+  queryResources.forEach((resource, index) => {
+    if (resource.materialization?.nestedDestination !== "exact-reveal-required") return;
+    const destination = destinations.find(({ id }) => id === resource.destinationId);
+    if (!destination?.reveal || destination.reveal.mode !== "nested") {
+      errors.push(`queryResources[${index}] requires a nested reveal contract on destination ${resource.destinationId || "(missing)"}.`);
     }
   });
 

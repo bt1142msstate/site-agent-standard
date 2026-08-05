@@ -103,6 +103,62 @@ async function activateImmediately(page, locator, touch) {
   else await page.mouse.click(point.x, point.y);
 }
 
+test("reveals and verifies an exact result inside a nested document surface", async ({ page }) => {
+  await page.goto("/examples/basic/");
+  await page.setContent(`
+    <style>
+      body { margin: 0; }
+      .page-header { position: fixed; inset: 0 0 auto; height: 76px; z-index: 10; background: white; }
+      .resource { position: fixed; inset: 88px 12px 12px; overflow: auto; }
+      .before { height: 620px; }
+      .document-viewer { height: 360px; overflow: auto; }
+      .document-page { min-height: 920px; padding: 24px; }
+      .source-excerpt { display: block; width: min(420px, 80vw); margin-top: 720px; }
+      .is-navigation-focus { outline: 4px solid #1684b3; outline-offset: 4px; }
+    </style>
+    <header class="page-header">Header</header>
+    <main class="resource"><div class="before"></div><details data-document>
+      <summary>Read document text</summary>
+      <div class="document-viewer"><section class="document-page" data-page="11">
+        <p class="source-excerpt">Weekly tuition is $75 per child.</p>
+      </section></div>
+    </details></main>
+  `);
+  await page.evaluate(async () => {
+    const { focusVerifiedNavigationTarget } = await import("/src/site-navigator.js");
+    const verifiedSteps = ["resource-route"];
+    const details = document.querySelector("[data-document]");
+    details.open = true;
+    verifiedSteps.push("document-page", "document-content");
+    const target = document.querySelector('[data-page="11"] .source-excerpt');
+    const focused = await new Promise((resolve) => {
+      focusVerifiedNavigationTarget({
+        target,
+        headerSelector: ".page-header",
+        onSettled: ({ visible }) => resolve(visible),
+      });
+    });
+    if (focused) verifiedSteps.push("source-excerpt");
+    window.nestedOutcome = {
+      exact: true,
+      visible: focused,
+      targetKind: "document-segment",
+      reveal: { complete: focused, verifiedSteps },
+    };
+  });
+
+  const target = page.locator(".source-excerpt");
+  await expect(page.locator("[data-document]")).toHaveAttribute("open", "");
+  await expect(target).toHaveAttribute("data-verified-navigation-state", "visible");
+  await expect(target).toHaveClass(/is-navigation-focus/);
+  await expect.poll(() => page.evaluate(() => window.nestedOutcome?.reveal?.complete)).toBe(true);
+  const visible = await target.evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    return rect.top >= 84 && rect.bottom <= innerHeight - 8;
+  });
+  expect(visible).toBe(true);
+});
+
 test("navigates a clipped, transformed drawer with nested two-axis scrolling", async ({ page }) => {
   await page.goto("/examples/basic/");
   await page.setContent(`

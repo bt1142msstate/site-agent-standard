@@ -67,6 +67,29 @@ Version `0.10.1` ranks those host-declared candidates by fit after scrolling,
 semantic precision, and rendered size. Compact values, controls, fields, and
 reference text now win over broad containers and are scrolled fully into view.
 
+Version `0.11.0` adds exact nested-result reveal contracts. Query evidence from
+inside a PDF, linked document, disclosure, dialog, viewer, or frame carries a
+host-declared semantic path through the outer route and nested resource to the
+exact source target. The runtime verifies every step and rejects results that
+stop at a wrapper, link, viewer shell, or document cover.
+
+```json
+{
+  "materialization": {
+    "basis": "document-text",
+    "stage": "build",
+    "surfaceParity": "required",
+    "nestedContent": "resolved",
+    "nestedDestination": "exact-reveal-required"
+  },
+  "destinationId": "documents.excerpt"
+}
+```
+
+The destination declares semantic `route`, `state`, `nested-resource`, and
+`target` reveal steps. Its adapter returns the verified step IDs and exact final
+target kind; selectors and storage paths remain private to the host.
+
 ## Publish a manifest
 
 Serve a public-only discovery document at `/site-agent.json` and advertise it:

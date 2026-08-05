@@ -69,6 +69,25 @@ export async function runSiteAgentConformance(options = {}) {
         if (result !== true) throw new Error("materialized-surface-parity-not-proven");
       });
     }
+    const nestedResources = materializedResources
+      .filter(({ materialization }) => materialization?.nestedDestination === "exact-reveal-required");
+    if (nestedResources.length) {
+      await runProof(proofs, "query.nested-destination-reveal", "query", async () => {
+        const testCase = requireCase(cases, "nestedNavigation");
+        const requests = testCase.requests || [testCase.request];
+        if (!Array.isArray(requests) || !requests.length) throw new Error("nested-navigation-request-required");
+        for (const request of requests) {
+          const result = await agent.query(request);
+          const destinations = result.items.map(({ destination }) => destination).filter(Boolean);
+          if (!destinations.length) throw new Error("nested-navigation-destination-required");
+          for (const destination of destinations) {
+            const outcome = await agent.navigate(destination);
+            if (outcome.reveal?.complete !== true) throw new Error("nested-reveal-not-proven");
+          }
+          if (typeof testCase.verify === "function") await testCase.verify(result);
+        }
+      });
+    }
     await runProof(proofs, "query.structured-read", "query", async () => {
       const testCase = requireCase(cases, "query");
       const result = await agent.query(testCase.request);

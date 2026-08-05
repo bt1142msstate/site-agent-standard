@@ -43,12 +43,13 @@
         },
         "materialization": {
           "type": "object",
-          "required": ["basis", "stage", "surfaceParity", "nestedContent"],
+          "required": ["basis", "stage", "surfaceParity", "nestedContent", "nestedDestination"],
           "properties": {
             "basis": { "enum": ["rendered-user-surface", "canonical-structured-source", "document-text", "external"] },
             "stage": { "enum": ["build", "runtime", "request"] },
             "surfaceParity": { "enum": ["required", "not-applicable"] },
-            "nestedContent": { "enum": ["resolved", "not-applicable"] }
+            "nestedContent": { "enum": ["resolved", "not-applicable"] },
+            "nestedDestination": { "enum": ["exact-reveal-required", "not-applicable"] }
           },
           "additionalProperties": false
         },
@@ -85,6 +86,22 @@
                 }
               }
             }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "materialization": {
+                "type": "object",
+                "properties": { "nestedDestination": { "const": "exact-reveal-required" } },
+                "required": ["nestedDestination"]
+              }
+            },
+            "required": ["materialization"]
+          },
+          "then": {
+            "properties": { "destinationId": { "type": "string" } },
+            "required": ["destinationId"]
           }
         }
       ],

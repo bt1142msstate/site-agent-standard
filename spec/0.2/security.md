@@ -24,24 +24,28 @@
 8. Navigation MUST resolve exact semantic targets through a host adapter. It
    MUST verify requested state, visibility, clipping, focus, and hit testing and
    MUST release interaction locks on cancellation, failure, or timeout.
-9. State-changing Actions MUST use authoritative domain handlers, current-state
+9. A nested Query result MUST reveal and verify every declared semantic step
+   before Navigation succeeds. Outer pages, links, cards, viewer shells, and
+   document covers MUST NOT substitute for the bound source target. Reveal
+   telemetry MUST contain only capability and step IDs.
+10. State-changing Actions MUST use authoritative domain handlers, current-state
    reconciliation, durable idempotency, explicit side-effect declarations,
    risk-appropriate confirmation, and audit evidence. A browser-memory set is
    not sufficient durable duplicate protection.
-10. Confirmations MUST identify the requesting site, actor, target, meaningful
+11. Confirmations MUST identify the requesting site, actor, target, meaningful
     change, external recipients or financial effects, and whether the operation
     is reversible. Sensitive credentials and payment secrets require an
     out-of-band, origin-visible host flow rather than model-visible form data.
-11. Open-world and external side effects MUST be declared. Implementations MUST
+12. Open-world and external side effects MUST be declared. Implementations MUST
     apply allowlists, quotas, request and result size limits, rate limits, and
     abuse controls appropriate to each capability.
-12. Cross-origin exposure requires an explicit trusted-origin policy. Tokens
+13. Cross-origin exposure requires an explicit trusted-origin policy. Tokens
     MUST be audience bound and MUST NOT be passed through to another service.
-13. Durable tasks and subscriptions MUST support cleanup, bounded retention,
+14. Durable tasks and subscriptions MUST support cleanup, bounded retention,
     current authorization, terminal-state stability, and denial-safe reconnect.
-14. Telemetry MUST exclude prompts, record contents, opaque references, personal
+15. Telemetry MUST exclude prompts, record contents, opaque references, personal
     data, credentials, and secrets. Capability IDs, status, duration, standard
     version, and sanitized failure classes are permitted.
-15. Conformance fixtures MUST be isolated from production data, avoid real
+16. Conformance fixtures MUST be isolated from production data, avoid real
     notifications or financial effects, and prove cleanup after success,
     cancellation, timeout, and partial failure.

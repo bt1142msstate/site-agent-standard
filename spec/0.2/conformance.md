@@ -30,21 +30,26 @@ The CLI MUST NOT report full conformance without an executable adapter.
    mobile-touch sizes. Prove that an oversized preferred target yields to the
    next declared precise candidate, while an undeclared DOM descendant is never
    selected.
-5. Prepare and confirm an Action, reject duplicate confirmation, validate the
+5. For every Query materialization that requires an exact nested destination,
+   query representative results and prove the ordered route, state,
+   nested-resource, and target reveal steps individually. The final target kind
+   and opaque reference MUST match the result provenance. Prove that stopping
+   at the outer page, card, link, viewer shell, or document cover fails.
+6. Prepare and confirm an Action, reject duplicate confirmation, validate the
    completed output, requery affected state, and navigate to the result.
-6. Reconcile equivalent and non-conflicting changes, require a replacement
+7. Reconcile equivalent and non-conflicting changes, require a replacement
    preview for a meaningful conflict, and reject expired or unauthorized plans
    without partial effects.
-7. For durable Actions, prove progress/result retrieval, cancellation, terminal
+8. For durable Actions, prove progress/result retrieval, cancellation, terminal
    state stability, current authorization, and opaque cursor/task identifiers.
-8. For live Queries, prove subscription authorization, event schema validation,
+9. For live Queries, prove subscription authorization, event schema validation,
    reconnect/cleanup behavior, and bounded resource use.
-9. Reject malformed, sunset, unknown, over-broad, and permission-denied
+10. Reject malformed, sunset, unknown, over-broad, and permission-denied
    capabilities before invoking a host mutation.
-10. Verify public discovery and every generated binding contain no authenticated
+11. Verify public discovery and every generated binding contain no authenticated
    capability, private extension, selector, storage path, database path,
    credential, private identifier, or tested record content.
-11. When Presentation is claimed, prove cursor travel before action, exact
+12. When Presentation is claimed, prove cursor travel before action, exact
     target framing, hotspot/ripple anchoring, visible typing events, mute,
     reduced motion, cleanup, and desktop plus touch-mobile rendering.
 

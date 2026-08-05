@@ -20,6 +20,31 @@
         "exact": { "const": true },
         "targetKinds": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string" } },
         "stateSchema": { "type": "object" },
+        "reveal": {
+          "type": "object",
+          "required": ["mode", "steps", "verification", "outerSurfaceFallback"],
+          "properties": {
+            "mode": { "const": "nested" },
+            "steps": {
+              "type": "array",
+              "minItems": 3,
+              "items": {
+                "type": "object",
+                "required": ["id", "kind"],
+                "properties": {
+                  "id": { "type": "string", "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$" },
+                  "kind": { "enum": ["route", "state", "nested-resource", "target"] },
+                  "stateKeys": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string" } },
+                  "targetKinds": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string" } }
+                },
+                "additionalProperties": false
+              }
+            },
+            "verification": { "const": "each-step-and-final-target" },
+            "outerSurfaceFallback": { "const": false }
+          },
+          "additionalProperties": false
+        },
         "targetSelection": {
           "type": "object",
           "required": ["order", "oversized", "requireFullyVisible", "inferredDomFallback"],

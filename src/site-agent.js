@@ -46,6 +46,29 @@ function validateSemanticDestination(destination, manifest) {
   return destination;
 }
 
+function assertNestedRevealIntent(intent, destination) {
+  if (destination?.reveal?.mode !== "nested") return;
+  const target = intent?.target;
+  if (!target?.reference || !target?.kind) throw new Error("nested-destination-exact-target-required");
+  if (!destination.targetKinds.includes(target.kind)) throw new Error("nested-destination-target-kind-invalid");
+  for (const step of destination.reveal.steps || []) {
+    if (step.kind !== "state") continue;
+    for (const key of step.stateKeys || []) {
+      if (!Object.hasOwn(intent.state || {}, key)) throw new Error(`nested-destination-state-required:${key}`);
+    }
+  }
+}
+
+function assertNestedRevealOutcome(outcome, intent, destination) {
+  if (destination?.reveal?.mode !== "nested") return;
+  if (outcome?.reveal?.complete !== true) throw new Error("nested-destination-reveal-not-complete");
+  const verified = new Set(outcome.reveal.verifiedSteps || []);
+  for (const step of destination.reveal.steps || []) {
+    if (!verified.has(step.id)) throw new Error(`nested-destination-step-not-verified:${step.id}`);
+  }
+  if (outcome.targetKind !== intent.target.kind) throw new Error("nested-destination-final-target-not-verified");
+}
+
 function safeTelemetry(report, event) {
   if (typeof report !== "function") return;
   report(Object.freeze({
@@ -141,15 +164,20 @@ export function createSiteAgent(options = {}) {
         if (resource.resultSchema) assertSchemaValue(resource.resultSchema, raw, "query-result");
         const items = Array.isArray(raw?.items) ? raw.items.map((item) => {
           if (!item || typeof item.reference !== "string" || !item.reference.trim()) throw new Error("invalid-query-result-reference");
+          const destination = validateSemanticDestination(item.destination || (resource.destinationId ? {
+            destinationId: resource.destinationId,
+            state: item.destinationState || {},
+            target: { reference: item.reference },
+          } : null), currentManifest);
+          if (resource.materialization?.nestedDestination === "exact-reveal-required") {
+            const declaration = findCapability(currentManifest.navigationDestinations, destination?.destinationId, "navigation");
+            assertNestedRevealIntent(destination, declaration);
+          }
           return {
             reference: item.reference,
             label: String(item.label || "").slice(0, 240),
             fields: item.fields && typeof item.fields === "object" ? item.fields : {},
-            destination: validateSemanticDestination(item.destination || (resource.destinationId ? {
-              destinationId: resource.destinationId,
-              state: item.destinationState || {},
-              target: { reference: item.reference },
-            } : null), currentManifest),
+            destination,
           };
         }) : [];
         return {
@@ -196,10 +224,12 @@ export function createSiteAgent(options = {}) {
         const destination = findCapability(currentManifest.navigationDestinations, intent.destinationId, "navigation");
         assertAuthorized(destination, context);
         validateSemanticDestination(intent, currentManifest);
+        assertNestedRevealIntent(intent, destination);
         if (destination.stateSchema) assertSchemaValue(destination.stateSchema, intent.state || {}, "navigation-state");
         const adapter = requiredAdapter(adapters.navigation?.navigate || adapters.navigation, "navigation");
         const outcome = await adapter({ context, destination, intent });
         if (!outcome || outcome.exact !== true || outcome.visible !== true) throw new Error("navigation-target-not-verified");
+        assertNestedRevealOutcome(outcome, intent, destination);
         return outcome;
       });
     },

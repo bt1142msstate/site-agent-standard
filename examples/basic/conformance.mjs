@@ -9,21 +9,43 @@ export default function createConformanceTarget(manifest) {
       ? { authenticated: true, permissions: ["orders.view", "orders.manage"] }
       : { authenticated: true, permissions: [] },
     adapters: {
-      query: async ({ request }) => ({
-        total: 1,
-        summary: "One matching order",
-        asOf: "2026-08-04T00:00:00.000Z",
-        items: [{
-          reference: "opaque-order-1",
-          label: "Example order",
-          fields: { status: request.filters?.status || "open" },
-          destinationState: { status: request.filters?.status || "open" },
-        }],
-      }),
-      navigation: async ({ intent }) => ({
-        exact: intent.target?.reference === "opaque-order-1",
-        visible: true,
-      }),
+      query: async ({ request }) => request.resourceId === "public-document-text"
+        ? ({
+            total: 1,
+            summary: "One matching document excerpt",
+            items: [{
+              reference: "opaque-excerpt-1",
+              label: "Tuition",
+              fields: { page: 11 },
+              destination: {
+                destinationId: "public-document.excerpt",
+                state: { documentPage: 11 },
+                target: { reference: "opaque-excerpt-1", kind: "document-segment" },
+              },
+            }],
+          })
+        : ({
+            total: 1,
+            summary: "One matching order",
+            asOf: "2026-08-04T00:00:00.000Z",
+            items: [{
+              reference: "opaque-order-1",
+              label: "Example order",
+              fields: { status: request.filters?.status || "open" },
+              destinationState: { status: request.filters?.status || "open" },
+            }],
+          }),
+      navigation: async ({ destination, intent }) => destination.reveal?.mode === "nested"
+        ? ({
+            exact: true,
+            visible: true,
+            targetKind: intent.target.kind,
+            reveal: { complete: true, verifiedSteps: destination.reveal.steps.map(({ id }) => id) },
+          })
+        : ({
+            exact: intent.target?.reference === "opaque-order-1",
+            visible: true,
+          }),
       action: {
         prepare: async ({ request }) => ({
           planId: request.input.orderReference === "opaque-conflict" ? "conflict-plan" : `plan-${++planSequence}`,
@@ -62,6 +84,8 @@ export default function createConformanceTarget(manifest) {
   return {
     createAgent,
     cases: {
+      materialization: { verify: () => true },
+      nestedNavigation: { request: { resourceId: "public-document-text", filters: { query: "tuition" } } },
       query: { request: { resourceId: "orders", filters: { status: "open" } } },
       invalidQuery: { request: { resourceId: "orders", filters: { status: 7 } } },
       navigation: {
