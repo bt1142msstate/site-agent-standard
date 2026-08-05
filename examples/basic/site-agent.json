@@ -46,6 +46,13 @@
       "permissionsAll": ["orders.manage"],
       "risk": "consequential",
       "confirmation": "explicit",
+      "reconciliation": {
+        "identity": "stable-reference",
+        "equivalent": "complete",
+        "nonConflicting": "rebase",
+        "conflicting": "reconfirm",
+        "missing": "complete-if-satisfied"
+      },
       "inputSchema": {
         "type": "object",
         "required": ["orderReference"],

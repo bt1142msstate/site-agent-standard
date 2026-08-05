@@ -46,6 +46,13 @@ function manifest() {
       permissionsAny: [],
       risk: "consequential",
       confirmation: "explicit",
+      reconciliation: {
+        identity: "stable-reference",
+        equivalent: "complete",
+        nonConflicting: "rebase",
+        conflicting: "reconfirm",
+        missing: "complete-if-satisfied",
+      },
       inputSchema: { type: "object" },
       destinationId: "records.detail",
     }],
@@ -135,6 +142,32 @@ test("rechecks current permissions for every invocation", async () => {
   await agent.query({ resourceId: "records" });
   allowed = false;
   await assert.rejects(agent.query({ resourceId: "records" }), /capability-not-authorized/);
+});
+
+test("returns a replacement preview for a meaningful concurrent conflict", async () => {
+  const agent = createSiteAgent({
+    manifest: manifest(),
+    context: { authenticated: true, permissions: ["records.manage"] },
+    adapters: {
+      action: {
+        prepare: async () => ({ planId: "old-plan", status: "prepared", confirmation: "explicit", expiresAt: "2099-01-01T00:00:00.000Z" }),
+        confirm: async () => ({
+          status: "reconfirmation-required",
+          reconciliation: "conflicting",
+          replacementPlan: {
+            planId: "new-plan",
+            status: "prepared",
+            confirmation: "explicit",
+            expiresAt: "2099-01-01T00:00:00.000Z",
+          },
+        }),
+        cancel: async () => ({ status: "canceled" }),
+      },
+    },
+  });
+  const result = await agent.confirmAction({ actionId: "records.archive", planId: "old-plan" });
+  assert.equal(result.status, "reconfirmation-required");
+  assert.equal(result.replacementPlan.planId, "new-plan");
 });
 
 test("rejects undeclared filters and unsafe adapter-authored destinations", async () => {

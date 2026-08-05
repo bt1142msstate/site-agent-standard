@@ -6,6 +6,13 @@ const precisions = new Set(["control", "field", "record", "record-page", "surfac
 const risks = new Set(["read", "reversible", "consequential", "destructive"]);
 const confirmations = new Set(["none", "explicit", "typed"]);
 const visibilities = new Set(["public", "authenticated"]);
+const reconciliationValues = Object.freeze({
+  identity: new Set(["stable-reference"]),
+  equivalent: new Set(["complete"]),
+  nonConflicting: new Set(["rebase", "reconfirm"]),
+  conflicting: new Set(["reconfirm", "reject"]),
+  missing: new Set(["complete-if-satisfied", "reconfirm", "reject"]),
+});
 
 function isObject(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -95,6 +102,13 @@ function validateManifestInternal(manifest, options = {}) {
     if (!risks.has(action.risk)) errors.push(`${path}.risk is invalid.`);
     if (!confirmations.has(action.confirmation)) errors.push(`${path}.confirmation is invalid.`);
     if (!isObject(action.inputSchema)) errors.push(`${path}.inputSchema must be a JSON Schema object.`);
+    if (!isObject(action.reconciliation)) {
+      errors.push(`${path}.reconciliation must declare stable conflict handling.`);
+    } else {
+      for (const [field, values] of Object.entries(reconciliationValues)) {
+        if (!values.has(action.reconciliation[field])) errors.push(`${path}.reconciliation.${field} is invalid.`);
+      }
+    }
     if (action.destinationId && !destinationIds.has(action.destinationId)) errors.push(`${path}.destinationId is unknown.`);
     if (action.risk !== "read" && action.confirmation === "none") errors.push(`${path} must require confirmation for a state-changing action.`);
   });

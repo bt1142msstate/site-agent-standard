@@ -22,7 +22,7 @@ as the Navigation profile implementation.
 ## Install
 
 ```bash
-npm install github:bt1142msstate/site-agent-standard#v0.4.0
+npm install github:bt1142msstate/site-agent-standard#v0.5.0
 ```
 
 ```js
@@ -35,6 +35,10 @@ import {
 Version `0.4.0` intentionally renames the package from
 `@bt1142msstate/site-navigator`. Existing `v0.3.1` and older tags retain their
 original package identity.
+
+Version `0.5.0` adds the Action reconciliation contract. Implementations
+distinguish equivalent, safely rebaseable, conflicting, and missing targets
+instead of treating every revision change as a failed action.
 
 ## Publish a manifest
 

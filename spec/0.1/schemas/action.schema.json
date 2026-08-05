@@ -4,7 +4,7 @@
   "$defs": {
     "action": {
       "type": "object",
-      "required": ["id", "description", "visibility", "risk", "confirmation", "inputSchema"],
+      "required": ["id", "description", "visibility", "risk", "confirmation", "inputSchema", "reconciliation"],
       "properties": {
         "id": { "type": "string" },
         "description": { "type": "string", "minLength": 8 },
@@ -13,6 +13,18 @@
         "permissionsAny": { "type": "array", "items": { "type": "string" } },
         "risk": { "enum": ["read", "reversible", "consequential", "destructive"] },
         "confirmation": { "enum": ["none", "explicit", "typed"] },
+        "reconciliation": {
+          "type": "object",
+          "required": ["identity", "equivalent", "nonConflicting", "conflicting", "missing"],
+          "properties": {
+            "identity": { "const": "stable-reference" },
+            "equivalent": { "const": "complete" },
+            "nonConflicting": { "enum": ["rebase", "reconfirm"] },
+            "conflicting": { "enum": ["reconfirm", "reject"] },
+            "missing": { "enum": ["complete-if-satisfied", "reconfirm", "reject"] }
+          },
+          "additionalProperties": false
+        },
         "inputSchema": { "type": "object" },
         "destinationId": { "type": "string" }
       },

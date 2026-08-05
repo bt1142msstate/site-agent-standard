@@ -17,6 +17,20 @@ schema, or a browser automation transport.
 - **Action** defines previewed, confirmed, idempotent site changes through the
   same authoritative domain operations used by the human interface.
 
+## Action reconciliation
+
+An Action plan MUST retain semantic intent and a stable opaque target reference.
+At confirmation, the host MUST reload current authorized state and classify it
+as unchanged, equivalent, non-conflicting, conflicting, or missing. Equivalent
+outcomes complete idempotently. A declared non-conflicting change MAY be rebased
+and applied. A meaningful conflict MUST produce a replacement preview requiring
+fresh confirmation, unless the declared policy requires rejection. A missing
+target MAY complete only when the requested outcome is independently proven to
+already be satisfied. Update timestamps alone MUST NOT define a conflict.
+
+Reconciliation never weakens current authorization, validation, audit,
+idempotency, or risk-appropriate confirmation requirements.
+
 Sites may claim individual profiles. Full conformance requires Query,
 Navigation, and Action plus complete visible-surface and human-action coverage.
 

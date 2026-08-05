@@ -3,6 +3,15 @@ export type CapabilityVisibility = "public" | "authenticated";
 export type TargetPrecision = "control" | "field" | "record" | "record-page" | "surface";
 export type ActionRisk = "read" | "reversible" | "consequential" | "destructive";
 export type ConfirmationKind = "none" | "explicit" | "typed";
+export type ActionReconciliationStatus = "confirmed" | "already-applied" | "reconfirmation-required";
+
+export interface ActionReconciliationPolicy {
+  identity: "stable-reference";
+  equivalent: "complete";
+  nonConflicting: "rebase" | "reconfirm";
+  conflicting: "reconfirm" | "reject";
+  missing: "complete-if-satisfied" | "reconfirm" | "reject";
+}
 
 export interface PermissionContract {
   permissionsAll?: string[];
@@ -36,6 +45,7 @@ export interface NavigationDestination extends SiteAgentCapability {
 export interface SiteAction extends SiteAgentCapability {
   risk: ActionRisk;
   confirmation: ConfirmationKind;
+  reconciliation: ActionReconciliationPolicy;
   inputSchema: Record<string, unknown>;
   destinationId?: string;
 }
@@ -97,6 +107,13 @@ export interface ActionPlan {
   confirmation: ConfirmationKind;
   expiresAt: string;
   preview?: unknown;
+  destination?: SemanticDestination | null;
+}
+
+export interface ActionConfirmationResult {
+  status: ActionReconciliationStatus;
+  reconciliation?: "unchanged" | "rebased" | "equivalent" | "conflicting" | "missing";
+  replacementPlan?: ActionPlan;
   destination?: SemanticDestination | null;
 }
 

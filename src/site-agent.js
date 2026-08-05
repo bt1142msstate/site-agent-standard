@@ -147,9 +147,22 @@ export function createSiteAgent(options = {}) {
         assertAuthorized(action, context);
         const adapter = requiredAdapter(adapters.action?.confirm, "action-confirm");
         const result = await adapter({ action, context, request });
-        if (!result || result.status !== "confirmed") throw new Error("action-confirmation-failed");
-        consumedPlans.add(request.planId);
-        return { ...result, destination: validateSemanticDestination(result.destination, manifest) };
+        const acceptedStatuses = new Set(["confirmed", "already-applied", "reconfirmation-required"]);
+        if (!result || !acceptedStatuses.has(result.status)) throw new Error("action-confirmation-failed");
+        if (result.status === "reconfirmation-required") {
+          if (!result.replacementPlan?.planId || result.replacementPlan.status !== "prepared") {
+            throw new Error("invalid-reconciliation-plan");
+          }
+        } else {
+          consumedPlans.add(request.planId);
+        }
+        return {
+          ...result,
+          destination: validateSemanticDestination(result.destination, manifest),
+          replacementPlan: result.replacementPlan
+            ? { ...result.replacementPlan, destination: validateSemanticDestination(result.replacementPlan.destination, manifest) }
+            : undefined,
+        };
       });
     },
     async cancelAction(request = {}) {
