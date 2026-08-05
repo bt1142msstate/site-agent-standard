@@ -7,7 +7,7 @@
   "name": "Example order site",
   "profiles": ["core", "query", "navigation", "action", "presentation"],
   "presentation": {
-    "preset": "standard-instructional-v1",
+    "preset": "standard-instructional-v2",
     "cursor": "modern-stemless-pointer",
     "cursorMotion": "travel-pause-click",
     "frameTarget": "settled-sticky-header-aware",

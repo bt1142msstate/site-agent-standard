@@ -50,6 +50,14 @@ Version `0.7.0` adds the optional first-party Presentation profile and browser
 adapter. Normal agents remain silent; tutorial runners can enable the shared
 pointer, ripple, motion, typing, and sound contract.
 
+Version `0.8.0` requires local static Query resources to prove parity with
+fully materialized user-visible content instead of indexing wrapper fragments.
+
+Version `0.9.0` makes the complete instructional presentation theme reusable:
+the browser adapter and offline recorder share exact click and keyboard sound
+generation, nested framing matches tutorial motion, and audible mode is applied
+correctly at controller creation.
+
 ## Publish a manifest
 
 Serve a public-only discovery document at `/site-agent.json` and advertise it:
@@ -104,19 +112,42 @@ import "@bt1142msstate/site-agent-standard/presentation.css";
 
 const agent = createSiteAgent({
   manifest,
-  presentation: { muted: true },
+  presentation: { muted: false },
   adapters: {
     ...adapters,
-    presentation: createBrowserPresentationAdapter({ sounds: true }),
+    presentation: createBrowserPresentationAdapter(),
   },
 });
 
 await agent.presentation.click(document.querySelector("[data-example-target]"));
 ```
 
-Presentation remains opt-in and muted by default for ordinary automation.
-Tutorial recording may enable sound, visible typing, and human-paced motion;
-reduced-motion and mute controls remain mandatory.
+The built-in `standard-instructional-v2` preset is the complete default tutorial
+theme: a crisp white pointer, eased nested scrolling, sticky-header-aware
+framing, target outline, anchored click ripple, tactile click audio, visible
+typing, and iPhone-inspired keyboard taps. The browser and offline soundtrack
+APIs use the same deterministic sound generator, so recorded and interactive
+presentation stay synchronized.
+
+Presentation remains opt-in and muted by default for ordinary automation. A
+tutorial enables the complete preset with `presentation: { muted: false }`;
+individual adapters may still set `sounds: false`. Reduced-motion and mute
+controls remain mandatory.
+
+Offline recorders can create the exact same local effects without extracting
+audio from a browser:
+
+```js
+import {
+  SITE_AGENT_PRESENTATION_SAMPLE_RATE,
+  mixPresentationSoundSamples,
+} from "@bt1142msstate/site-agent-standard/presentation-audio";
+
+mixPresentationSoundSamples(track, frame, "click", {
+  eventIndex: 0,
+  sampleRate: SITE_AGENT_PRESENTATION_SAMPLE_RATE,
+});
+```
 
 ## Query, navigate, and act
 

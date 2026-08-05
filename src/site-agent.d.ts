@@ -121,6 +121,7 @@ export interface SiteAgentManifest {
 }
 
 export * from "./presentation.js";
+export * from "./presentation-audio.js";
 
 export interface SiteAgentContext {
   authenticated: boolean;

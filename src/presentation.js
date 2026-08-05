@@ -1,19 +1,28 @@
-export const SITE_AGENT_PRESENTATION_VERSION = 1;
+import {
+  SITE_AGENT_PRESENTATION_SOUND_PROFILES,
+  createPresentationSoundSamples,
+} from "./presentation-audio.js";
+
+export * from "./presentation-audio.js";
+
+export const SITE_AGENT_PRESENTATION_VERSION = 2;
 
 export const SITE_AGENT_PRESENTATION_PRESET = Object.freeze({
-  id: "standard-instructional-v1",
+  id: "standard-instructional-v2",
   cursor: "modern-stemless-pointer",
   cursorMotion: "travel-pause-click",
   frameTarget: "settled-sticky-header-aware",
   clickFeedback: "target-outline-and-ripple",
-  clickSound: "soft-tactile-ui-click-v1",
+  clickSound: SITE_AGENT_PRESENTATION_SOUND_PROFILES.click,
   scrollMotion: "tutorial-eased-nested-scroll-v1",
   inputPresentation: "visible-typing-with-keystroke-audio",
-  typingSound: "ios-inspired-mobile-keyboard-tap-v1",
+  typingSound: SITE_AGENT_PRESENTATION_SOUND_PROFILES.typing,
   responsiveVariants: Object.freeze(["desktop", "mobile"]),
   moveDuration: Object.freeze({ minimumMs: 280, maximumMs: 640, baseMs: 240, distanceFactor: 0.18 }),
   targetPauseMs: 180,
   clickDurationMs: 220,
+  keyDelayMs: 42,
+  soundsEnabled: true,
 });
 
 export const SITE_AGENT_PRESENTATION_SELECTORS = Object.freeze({
@@ -46,6 +55,172 @@ export function getPresentationPointerPoint(box, options = {}) {
   });
 }
 
+function nextAnimationFrame(windowRef) {
+  return new Promise((resolve) => windowRef.requestAnimationFrame(resolve));
+}
+
+function isScrollableElement(element, windowRef) {
+  const style = windowRef.getComputedStyle(element);
+  return (
+    (/(auto|scroll|overlay)/.test(style.overflowY) && element.scrollHeight > element.clientHeight + 2) ||
+    (/(auto|scroll|overlay)/.test(style.overflowX) && element.scrollWidth > element.clientWidth + 2)
+  );
+}
+
+function getTopOcclusion(documentRef, windowRef) {
+  let maximum = 0;
+  documentRef.querySelectorAll("body *").forEach((element) => {
+    if (!(element instanceof windowRef.HTMLElement)) return;
+    const style = windowRef.getComputedStyle(element);
+    if (!new Set(["fixed", "sticky"]).has(style.position) || style.visibility === "hidden") return;
+    const bounds = element.getBoundingClientRect();
+    if (
+      bounds.top > 2 ||
+      bounds.bottom <= 0 ||
+      bounds.width < windowRef.innerWidth * 0.45 ||
+      Number(style.opacity) === 0
+    ) return;
+    maximum = Math.max(maximum, bounds.bottom);
+  });
+  return maximum;
+}
+
+async function animateScrollTarget(target, destination, options) {
+  const { root, windowRef, reducedMotion, preset } = options;
+  const isRoot = target === root;
+  const startLeft = isRoot ? windowRef.scrollX : target.scrollLeft;
+  const startTop = isRoot ? windowRef.scrollY : target.scrollTop;
+  const deltaLeft = destination.left - startLeft;
+  const deltaTop = destination.top - startTop;
+  const distance = Math.hypot(deltaLeft, deltaTop);
+  if (distance < 2) return null;
+  const duration = reducedMotion ? 0 : getPresentationMotionDuration(distance, preset);
+  const startedAt = windowRef.performance.now();
+  const setPosition = (progress) => {
+    const eased = progress < 0.5
+      ? 4 * progress * progress * progress
+      : 1 - (Math.pow(-2 * progress + 2, 3) / 2);
+    const left = startLeft + (deltaLeft * eased);
+    const top = startTop + (deltaTop * eased);
+    if (isRoot) windowRef.scrollTo(left, top);
+    else target.scrollTo(left, top);
+  };
+  if (!duration) {
+    setPosition(1);
+  } else {
+    while (true) {
+      const progress = clamp((windowRef.performance.now() - startedAt) / duration, 0, 1);
+      setPosition(progress);
+      if (progress >= 1) break;
+      await nextAnimationFrame(windowRef);
+    }
+  }
+  return Object.freeze({
+    distancePx: Math.round(distance),
+    durationMs: Math.round(windowRef.performance.now() - startedAt),
+    scope: isRoot ? "viewport" : "container",
+  });
+}
+
+export async function framePresentationTarget(target, options = {}) {
+  if (!target?.getBoundingClientRect) throw new TypeError("presentation-target-element-required");
+  const documentRef = options.document || target.ownerDocument || globalThis.document;
+  const windowRef = options.window || documentRef?.defaultView || globalThis.window;
+  const root = documentRef.scrollingElement || documentRef.documentElement;
+  const scrollParents = [];
+  for (let parent = target.parentElement; parent; parent = parent.parentElement) {
+    if (
+      parent !== documentRef.body &&
+      parent !== documentRef.documentElement &&
+      isScrollableElement(parent, windowRef)
+    ) scrollParents.push(parent);
+  }
+  scrollParents.push(root);
+
+  const topMargin = Math.max(
+    getTopOcclusion(documentRef, windowRef) + 18,
+    Math.min(128, Math.max(72, windowRef.innerHeight * 0.13)),
+  );
+  const bottomMargin = Math.min(96, Math.max(48, windowRef.innerHeight * 0.1));
+  const sideMargin = Math.min(40, Math.max(18, windowRef.innerWidth * 0.035));
+  const priorStyles = {
+    rootAnchor: root.style.overflowAnchor,
+    rootBehavior: root.style.scrollBehavior,
+    bodyAnchor: documentRef.body.style.overflowAnchor,
+    bodyBehavior: documentRef.body.style.scrollBehavior,
+  };
+  root.style.overflowAnchor = "none";
+  root.style.scrollBehavior = "auto";
+  documentRef.body.style.overflowAnchor = "none";
+  documentRef.body.style.scrollBehavior = "auto";
+  const segments = [];
+
+  try {
+    for (const scrollTarget of scrollParents) {
+      const isRoot = scrollTarget === root;
+      const targetRect = target.getBoundingClientRect();
+      const containerRect = isRoot
+        ? { top: topMargin, bottom: windowRef.innerHeight - bottomMargin, left: sideMargin, right: windowRef.innerWidth - sideMargin }
+        : scrollTarget.getBoundingClientRect();
+      const verticalPadding = isRoot ? 0 : Math.min(24, Math.max(10, scrollTarget.clientHeight * 0.04));
+      const horizontalPadding = isRoot ? 0 : Math.min(24, Math.max(10, scrollTarget.clientWidth * 0.04));
+      const visibleRect = {
+        top: containerRect.top + verticalPadding,
+        bottom: containerRect.bottom - verticalPadding,
+        left: containerRect.left + horizontalPadding,
+        right: containerRect.right - horizontalPadding,
+      };
+      if (
+        targetRect.top >= visibleRect.top &&
+        targetRect.bottom <= visibleRect.bottom &&
+        targetRect.left >= visibleRect.left &&
+        targetRect.right <= visibleRect.right
+      ) continue;
+
+      const currentLeft = isRoot ? windowRef.scrollX : scrollTarget.scrollLeft;
+      const currentTop = isRoot ? windowRef.scrollY : scrollTarget.scrollTop;
+      const maximumLeft = isRoot
+        ? Math.max(0, root.scrollWidth - windowRef.innerWidth)
+        : Math.max(0, scrollTarget.scrollWidth - scrollTarget.clientWidth);
+      const maximumTop = isRoot
+        ? Math.max(0, root.scrollHeight - windowRef.innerHeight)
+        : Math.max(0, scrollTarget.scrollHeight - scrollTarget.clientHeight);
+      const segment = await animateScrollTarget(scrollTarget, {
+        left: clamp(
+          currentLeft + ((targetRect.left + targetRect.right) / 2) - ((visibleRect.left + visibleRect.right) / 2),
+          0,
+          maximumLeft,
+        ),
+        top: clamp(
+          currentTop + ((targetRect.top + targetRect.bottom) / 2) - ((visibleRect.top + visibleRect.bottom) / 2),
+          0,
+          maximumTop,
+        ),
+      }, {
+        root,
+        windowRef,
+        reducedMotion: options.reducedMotion === true,
+        preset: options.preset || SITE_AGENT_PRESENTATION_PRESET,
+      });
+      if (segment) segments.push(segment);
+    }
+    await nextAnimationFrame(windowRef);
+    await nextAnimationFrame(windowRef);
+  } finally {
+    root.style.overflowAnchor = priorStyles.rootAnchor;
+    root.style.scrollBehavior = priorStyles.rootBehavior;
+    documentRef.body.style.overflowAnchor = priorStyles.bodyAnchor;
+    documentRef.body.style.scrollBehavior = priorStyles.bodyBehavior;
+  }
+
+  return Object.freeze({
+    distancePx: segments.reduce((total, segment) => total + segment.distancePx, 0),
+    durationMs: segments.reduce((total, segment) => total + segment.durationMs, 0),
+    scrolled: segments.length > 0,
+    segments: Object.freeze(segments),
+  });
+}
+
 function requiredAdapterMethod(adapter, method) {
   if (typeof adapter?.[method] !== "function") throw new Error(`presentation-${method}-not-supported`);
   return adapter[method].bind(adapter);
@@ -69,6 +244,7 @@ export function createPresentationController(options = {}) {
     ...(options.preset || {}),
   });
   let muted = options.muted !== false;
+  adapter.setMuted?.(muted);
 
   async function invoke(event, operation) {
     const startedAt = Date.now();
@@ -120,6 +296,8 @@ export function createBrowserPresentationAdapter(options = {}) {
   const documentRef = options.document || globalThis.document;
   const windowRef = options.window || globalThis.window;
   let muted = options.muted !== false;
+  let audioContext = null;
+  let soundIndex = 0;
 
   function resolveElement(target) {
     if (target?.nodeType === 1) return target;
@@ -138,19 +316,31 @@ export function createBrowserPresentationAdapter(options = {}) {
     return documentRef.querySelector(SITE_AGENT_PRESENTATION_SELECTORS.pointer);
   }
 
-  function playTone(kind) {
-    if (muted || options.sounds === false || !windowRef?.AudioContext) return;
-    const context = new windowRef.AudioContext();
-    const oscillator = context.createOscillator();
-    const gain = context.createGain();
-    oscillator.type = "sine";
-    oscillator.frequency.value = kind === "typing" ? 760 : 520;
-    gain.gain.setValueAtTime(0.035, context.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.045);
-    oscillator.connect(gain).connect(context.destination);
-    oscillator.start();
-    oscillator.stop(context.currentTime + 0.05);
-    oscillator.addEventListener("ended", () => context.close(), { once: true });
+  function getAudioContext() {
+    const AudioContext = windowRef?.AudioContext || windowRef?.webkitAudioContext;
+    if (!AudioContext) return null;
+    audioContext ||= new AudioContext();
+    if (audioContext.state === "suspended") audioContext.resume?.().catch?.(() => {});
+    return audioContext;
+  }
+
+  function playSound(kind) {
+    if (muted || options.sounds === false) return false;
+    const context = getAudioContext();
+    if (!context) return false;
+    const samples = createPresentationSoundSamples(kind, {
+      eventIndex: soundIndex,
+      sampleRate: context.sampleRate,
+    });
+    soundIndex += 1;
+    const buffer = context.createBuffer(1, samples.length, context.sampleRate);
+    buffer.copyToChannel(Float32Array.from(samples), 0);
+    const source = context.createBufferSource();
+    source.buffer = buffer;
+    source.connect(context.destination);
+    source.start();
+    options.onSound?.({ kind, profile: SITE_AGENT_PRESENTATION_SOUND_PROFILES[kind] });
+    return true;
   }
 
   return Object.freeze({
@@ -158,8 +348,12 @@ export function createBrowserPresentationAdapter(options = {}) {
     mount,
     async move({ target, settings, preset }) {
       const element = resolveElement(target);
-      element.scrollIntoView({ behavior: settings.reducedMotion ? "auto" : "smooth", block: "center", inline: "center" });
-      await new Promise((resolve) => windowRef.requestAnimationFrame(() => windowRef.requestAnimationFrame(resolve)));
+      const framing = await framePresentationTarget(element, {
+        document: documentRef,
+        window: windowRef,
+        reducedMotion: settings.reducedMotion,
+        preset,
+      });
       documentRef.querySelectorAll(SITE_AGENT_PRESENTATION_SELECTORS.target).forEach((value) => {
         value.removeAttribute("data-site-agent-presentation-target");
       });
@@ -173,7 +367,7 @@ export function createBrowserPresentationAdapter(options = {}) {
       pointer.style.transform = `translate3d(${point.x - 5}px, ${point.y - 4}px, 0)`;
       pointer.classList.add("is-visible");
       await new Promise((resolve) => setTimeout(resolve, settings.reducedMotion ? 0 : getPresentationMotionDuration(distance, preset)));
-      return { point, exact: true, visible: true };
+      return { point, exact: true, visible: true, framing };
     },
     async click({ target, settings, preset }) {
       const element = resolveElement(target);
@@ -189,7 +383,7 @@ export function createBrowserPresentationAdapter(options = {}) {
       ripple.style.top = `${point.y}px`;
       documentRef.body.append(ripple);
       ripple.addEventListener("animationend", () => ripple.remove(), { once: true });
-      playTone("click");
+      playSound("click");
       element.click();
       await new Promise((resolve) => setTimeout(resolve, settings.reducedMotion ? 0 : preset.clickDurationMs));
       return { point, exact: true, visible: true };
@@ -198,11 +392,11 @@ export function createBrowserPresentationAdapter(options = {}) {
       const element = resolveElement(target);
       element.focus();
       element.value = "";
-      const delay = settings.reducedMotion ? 0 : Math.max(0, Number(settings.keyDelayMs ?? 42));
+      const delay = settings.reducedMotion ? 0 : Math.max(0, Number(settings.keyDelayMs ?? SITE_AGENT_PRESENTATION_PRESET.keyDelayMs));
       for (const character of value) {
         element.value += character;
         element.dispatchEvent(new windowRef.InputEvent("input", { bubbles: true, data: character, inputType: "insertText" }));
-        playTone("typing");
+        playSound("typing");
         if (delay) await new Promise((resolve) => setTimeout(resolve, delay));
       }
       element.dispatchEvent(new windowRef.Event("change", { bubbles: true }));
@@ -217,6 +411,8 @@ export function createBrowserPresentationAdapter(options = {}) {
       this.clear?.();
       documentRef.querySelector(SITE_AGENT_PRESENTATION_SELECTORS.pointer)?.remove();
       documentRef.querySelectorAll(SITE_AGENT_PRESENTATION_SELECTORS.ripple).forEach((value) => value.remove());
+      audioContext?.close?.().catch?.(() => {});
+      audioContext = null;
     },
   });
 }

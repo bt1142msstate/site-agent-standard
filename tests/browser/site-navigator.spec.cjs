@@ -35,6 +35,65 @@ test("renders the standard instructional pointer, exact target, and anchored rip
   expect(alignment.y).toBeLessThanOrEqual(1);
 });
 
+test("the default presentation preset frames nested content and visibly types with shared sound cues", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/examples/basic/");
+  await page.setContent(`
+    <link rel="stylesheet" href="/src/presentation.css">
+    <style>
+      html, body { margin: 0; min-height: 1500px; }
+      header { position: fixed; inset: 0 0 auto; height: 88px; z-index: 10; background: white; }
+      main { padding-top: 700px; }
+      .nested { width: 330px; height: 260px; overflow: auto; }
+      .canvas { box-sizing: border-box; width: 980px; height: 820px; padding: 650px 0 0 720px; }
+      input { width: 190px; height: 48px; }
+    </style>
+    <header>Sticky header</header>
+    <main><div class="nested"><div class="canvas"><input aria-label="Tutorial field"></div></div></main>
+  `);
+  await page.evaluate(async () => {
+    const { createBrowserPresentationAdapter, createPresentationController } = await import("/src/presentation.js");
+    const input = document.querySelector("input");
+    window.presentationEvents = [];
+    input.addEventListener("input", (event) => window.presentationEvents.push(["input", event.data]));
+    input.addEventListener("change", () => window.presentationEvents.push(["change"]));
+    const controller = createPresentationController({
+      adapter: createBrowserPresentationAdapter({
+        onSound: ({ kind, profile }) => window.presentationEvents.push(["sound", kind, profile]),
+      }),
+      muted: false,
+      preset: { targetPauseMs: 0 },
+    });
+    await controller.move(input, { reducedMotion: true });
+    await controller.type(input, "Hi", { keyDelayMs: 0, reducedMotion: true });
+  });
+
+  const input = page.locator("input");
+  await expect(input).toHaveValue("Hi");
+  await expect(input).toHaveAttribute("data-site-agent-presentation-target", "");
+  const evidence = await page.evaluate(() => {
+    const input = document.querySelector("input");
+    const rect = input.getBoundingClientRect();
+    const pointerPath = document.querySelector("[data-site-agent-presentation-pointer] path");
+    return {
+      events: window.presentationEvents,
+      inputVisible: rect.top >= 88 && rect.bottom <= innerHeight && rect.left >= 0 && rect.right <= innerWidth,
+      nestedLeft: document.querySelector(".nested").scrollLeft,
+      nestedTop: document.querySelector(".nested").scrollTop,
+      pointerFill: pointerPath?.getAttribute("fill"),
+      pointerStroke: pointerPath?.getAttribute("stroke"),
+    };
+  });
+  expect(evidence.inputVisible).toBe(true);
+  expect(evidence.nestedLeft).toBeGreaterThan(0);
+  expect(evidence.nestedTop).toBeGreaterThan(0);
+  expect(evidence.pointerFill).toBe("#fff");
+  expect(evidence.pointerStroke).toBe("#10243b");
+  expect(evidence.events.filter(([kind]) => kind === "input")).toHaveLength(2);
+  expect(evidence.events.at(-1)).toEqual(["change"]);
+  expect(evidence.events.some(([event, kind]) => event === "sound" && kind === "typing")).toBe(true);
+});
+
 async function activateImmediately(page, locator, touch) {
   const point = await locator.evaluate((element) => {
     const rect = element.getBoundingClientRect();
