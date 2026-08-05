@@ -12,7 +12,7 @@ export interface NavigationTargetCandidate {
 export interface NavigationDescriptor extends NavigationTargetCandidate {
   candidates?: NavigationTargetCandidate[];
   candidateIndex?: number;
-  selectionReason?: "first-fully-visible-candidate" | "unmeasured-candidate" | "least-overflow-candidate";
+  selectionReason?: "most-precise-fitting-candidate" | "most-precise-unmeasured-candidate" | "most-precise-least-overflow-candidate";
 }
 
 export interface NavigationIntent<State = unknown> {

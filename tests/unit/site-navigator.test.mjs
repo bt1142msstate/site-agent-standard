@@ -49,7 +49,85 @@ test("ordered exact targets fall back from an oversized record to declared text"
   assert.equal(selected.target, text);
   assert.equal(selected.kind, "order-title");
   assert.equal(selected.candidateIndex, 1);
-  assert.equal(selected.selectionReason, "first-fully-visible-candidate");
+  assert.equal(selected.selectionReason, "most-precise-fitting-candidate");
+});
+
+test("target selection chooses the most precise concise target even when a broad record also fits", () => {
+  const ownerDocument = { body: {}, querySelector: () => null };
+  const record = {
+    isConnected: true,
+    ownerDocument,
+    parentElement: null,
+    getBoundingClientRect: () => ({ top: 100, bottom: 620, left: 12, right: 378, height: 520, width: 366 }),
+  };
+  const value = {
+    isConnected: true,
+    ownerDocument,
+    parentElement: record,
+    getBoundingClientRect: () => ({ top: 540, bottom: 580, left: 40, right: 180, height: 40, width: 140 }),
+  };
+  const selected = selectBestNavigationTarget({
+    exact: true,
+    target: record,
+    candidates: [
+      { exact: true, kind: "staff-record", precision: "record", target: record },
+      { exact: true, kind: "hourly-rate", precision: "value", target: value },
+    ],
+  }, {
+    windowRef: {
+      innerHeight: 700,
+      innerWidth: 390,
+      getComputedStyle: () => ({ overflowX: "visible", overflowY: "visible", position: "static" }),
+    },
+  });
+
+  assert.equal(selected.target, value);
+  assert.equal(selected.kind, "hourly-rate");
+  assert.equal(selected.selectionReason, "most-precise-fitting-candidate");
+});
+
+test("off-screen reference text is ranked by fit after scrolling", () => {
+  const ownerDocument = { body: {}, querySelector: () => null };
+  const scrollSurface = {
+    clientHeight: 600,
+    clientWidth: 366,
+    getBoundingClientRect: () => ({ top: 100, bottom: 700, left: 12, right: 378, height: 600, width: 366 }),
+    parentElement: null,
+    scrollHeight: 2400,
+    scrollWidth: 366,
+  };
+  const record = {
+    isConnected: true,
+    ownerDocument,
+    parentElement: scrollSurface,
+    getBoundingClientRect: () => ({ top: 1400, bottom: 2500, left: 12, right: 378, height: 1100, width: 366 }),
+  };
+  const text = {
+    isConnected: true,
+    ownerDocument,
+    parentElement: record,
+    getBoundingClientRect: () => ({ top: 1440, bottom: 1484, left: 32, right: 280, height: 44, width: 248 }),
+  };
+  const selected = selectBestNavigationTarget({
+    exact: true,
+    target: record,
+    candidates: [
+      { exact: true, kind: "request", precision: "record", target: record },
+      { exact: true, kind: "request-reference", precision: "text", target: text },
+    ],
+  }, {
+    windowRef: {
+      innerHeight: 844,
+      innerWidth: 390,
+      getComputedStyle: (element) => element === scrollSurface
+        ? { overflowX: "hidden", overflowY: "auto", position: "fixed" }
+        : { overflowX: "visible", overflowY: "visible", position: "static" },
+    },
+  });
+
+  assert.equal(selected.target, text);
+  assert.equal(selected.kind, "request-reference");
+  assert.equal(selected.selectionReason, "most-precise-fitting-candidate");
 });
 
 test("target selection never invents an undeclared descendant", () => {
@@ -70,7 +148,7 @@ test("target selection never invents an undeclared descendant", () => {
   });
 
   assert.equal(selected.target, record);
-  assert.equal(selected.selectionReason, "least-overflow-candidate");
+  assert.equal(selected.selectionReason, "most-precise-least-overflow-candidate");
 });
 
 test("site navigators center nested mobile scroll surfaces and retain focus", () => {

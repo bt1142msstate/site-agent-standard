@@ -63,6 +63,10 @@ complete record while declaring a concise value, field, control, or text
 fallback. The runtime chooses the first candidate that fits the actual visible
 region and never invents a descendant through DOM inference.
 
+Version `0.10.1` ranks those host-declared candidates by fit after scrolling,
+semantic precision, and rendered size. Compact values, controls, fields, and
+reference text now win over broad containers and are scrolled fully into view.
+
 ## Publish a manifest
 
 Serve a public-only discovery document at `/site-agent.json` and advertise it:

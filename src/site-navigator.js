@@ -136,26 +136,68 @@ function getVisibleBounds(target, windowRef, margin = 8, headerSelector = ".site
   }, getViewportBounds(target, windowRef, margin, headerSelector));
 }
 
-function getCandidateFit(candidate, windowRef, options = {}) {
+function getCandidateCapacity(candidate, windowRef, options = {}) {
   const geometryTarget = candidate?.highlightTarget || candidate?.target;
-  const rect = geometryTarget?.getBoundingClientRect?.();
-  if (!rect) return { fits: null, overflow: 0 };
-  const bounds = getVisibleBounds(
+  const viewportBounds = getViewportBounds(
     geometryTarget,
     windowRef,
     Number(options.margin ?? 8),
     options.headerSelector,
   );
-  const availableHeight = Math.max(0, bounds.bottom - bounds.top);
-  const availableWidth = Math.max(0, bounds.right - bounds.left);
+  let availableHeight = Math.max(0, viewportBounds.bottom - viewportBounds.top);
+  let availableWidth = Math.max(0, viewportBounds.right - viewportBounds.left);
+  for (const ancestor of getClippingAncestors(geometryTarget, windowRef)) {
+    const rect = ancestor.getBoundingClientRect?.();
+    if (!rect) continue;
+    availableHeight = Math.min(availableHeight, Math.max(0, Number(rect.height || ancestor.clientHeight || 0)));
+    availableWidth = Math.min(availableWidth, Math.max(0, Number(rect.width || ancestor.clientWidth || 0)));
+  }
+  return { availableHeight, availableWidth };
+}
+
+function getCandidateFit(candidate, windowRef, options = {}) {
+  const geometryTarget = candidate?.highlightTarget || candidate?.target;
+  const rect = geometryTarget?.getBoundingClientRect?.();
+  if (!rect) return { area: Number.POSITIVE_INFINITY, fits: null, overflow: 0 };
+  const { availableHeight, availableWidth } = getCandidateCapacity(candidate, windowRef, options);
+  const height = Math.max(0, Number(rect.height || 0));
+  const width = Math.max(0, Number(rect.width || 0));
   const heightOverflow = Math.max(0, Number(rect.height || 0) - availableHeight);
   const widthOverflow = Math.max(0, Number(rect.width || 0) - availableWidth);
   return {
-    fits: Number(rect.height || 0) > 0 && Number(rect.width || 0) > 0
+    area: height * width,
+    fits: height > 0 && width > 0
       && heightOverflow === 0 && widthOverflow === 0,
     overflow: (heightOverflow / Math.max(1, availableHeight))
       + (widthOverflow / Math.max(1, availableWidth)),
   };
+}
+
+const precisionPriority = Object.freeze({
+  value: 0,
+  control: 1,
+  field: 2,
+  text: 3,
+  record: 4,
+  section: 5,
+  surface: 6,
+});
+
+function rankCandidate(candidate, fit) {
+  return [
+    fit.fits === true ? 0 : fit.fits == null ? 1 : 2,
+    Number(precisionPriority[candidate.precision] ?? 7),
+    fit.fits === false ? fit.overflow : 0,
+    fit.area,
+    candidate.candidateIndex,
+  ];
+}
+
+function compareCandidateRanks(left, right) {
+  for (let index = 0; index < left.length; index += 1) {
+    if (left[index] !== right[index]) return left[index] - right[index];
+  }
+  return 0;
 }
 
 function normalizeTargetCandidates(descriptor) {
@@ -176,36 +218,28 @@ function normalizeTargetCandidates(descriptor) {
 
 /**
  * Selects from host-declared semantic targets without inferring meaning from
- * the DOM. Candidate order expresses host preference; an oversized candidate
- * yields to the next declared candidate that can be shown in full.
+ * the DOM. Precision and fit-after-scroll outrank declaration order so the
+ * smallest useful reference is shown instead of a broad container.
  */
 export function selectBestNavigationTarget(descriptor, options = {}) {
   if (descriptor?.exact !== true) return descriptor || null;
   const windowRef = options.windowRef || globalThis;
   const candidates = normalizeTargetCandidates(descriptor);
   if (!candidates.length) return null;
-  let leastOverflowCandidate = null;
-  let leastOverflow = Number.POSITIVE_INFINITY;
-  let firstUnknownCandidate = null;
-
-  for (const candidate of candidates) {
-    const fit = getCandidateFit(candidate, windowRef, options);
-    if (fit.fits === true) {
-      return { ...candidate, selectionReason: "first-fully-visible-candidate" };
-    }
-    if (fit.fits == null && !firstUnknownCandidate) firstUnknownCandidate = candidate;
-    if (fit.fits === false && fit.overflow < leastOverflow) {
-      leastOverflow = fit.overflow;
-      leastOverflowCandidate = candidate;
-    }
-  }
-
-  if (firstUnknownCandidate) {
-    return { ...firstUnknownCandidate, selectionReason: "unmeasured-candidate" };
-  }
-  return leastOverflowCandidate
-    ? { ...leastOverflowCandidate, selectionReason: "least-overflow-candidate" }
-    : null;
+  const ranked = candidates
+    .map((candidate) => {
+      const fit = getCandidateFit(candidate, windowRef, options);
+      return { candidate, fit, rank: rankCandidate(candidate, fit) };
+    })
+    .sort((left, right) => compareCandidateRanks(left.rank, right.rank));
+  const selected = ranked[0];
+  if (!selected) return null;
+  const selectionReason = selected.fit.fits === true
+    ? "most-precise-fitting-candidate"
+    : selected.fit.fits == null
+      ? "most-precise-unmeasured-candidate"
+      : "most-precise-least-overflow-candidate";
+  return { ...selected.candidate, selectionReason };
 }
 
 export function isVerifiedNavigationTargetVisible(options = {}) {

@@ -90,13 +90,15 @@ a transport to bypass Action confirmation and authoritative handlers.
 ## Exact target selection
 
 A Navigation adapter MAY return an ordered set of exact semantic target
-candidates. Candidate order expresses the host application's preferred level
-of detail. The runtime selects the first candidate that can be shown fully in
-the active visible region, including clipping containers, dialogs, sticky
-headers, and the visual viewport. When a preferred card or section is too large,
-the adapter MUST declare a smaller value, field, control, or text element; the
-runtime then frames and highlights that candidate instead of leaving the user
-with a partially visible container.
+candidates. The runtime ranks candidates by whether they can fit after
+scrolling, semantic precision, and rendered size; declaration order is the
+final tie-break. A candidate's current off-screen position MUST NOT make it lose
+to a broader container when it can be scrolled fully into the active visible
+region, including clipping containers, dialogs, sticky headers, and the visual
+viewport. The adapter MUST declare a smaller value, field, control, or text
+element for a broad card or section; the runtime then frames and highlights
+that concise candidate instead of leaving the user with a partially visible
+container.
 
 Candidate resolution is host-declared. A runtime MUST NOT search arbitrary DOM
 text, infer a selector, or substitute an undeclared descendant. If no declared

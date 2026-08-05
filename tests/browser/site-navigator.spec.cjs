@@ -209,6 +209,78 @@ test("uses a declared concise text target when the preferred record cannot fit",
   expect(visible).toBe(true);
 });
 
+test("chooses and reveals the smallest precise off-screen reference when the record also fits", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/examples/basic/");
+  await page.setContent(`
+    <style>
+      body { margin: 0; }
+      .page-header { position: fixed; inset: 0 0 auto; height: 88px; z-index: 10; background: white; }
+      .surface { position: fixed; inset: 100px 12px 12px; overflow: auto; }
+      .before { height: 980px; }
+      .record { box-sizing: border-box; height: 520px; padding: 24px; background: white; }
+      .reference-wide { display: block; width: 300px; height: 52px; }
+      .reference-value { display: block; width: 130px; height: 36px; margin-top: 300px; }
+      .is-navigation-focus { outline: 4px solid #1684b3; outline-offset: 4px; }
+    </style>
+    <header class="page-header">Header</header>
+    <main class="surface"><div class="before"></div><article class="record">
+      <h2 class="reference-wide">Staff pay details</h2>
+      <output class="reference-value">$18.00 per hour</output>
+    </article></main>
+  `);
+  await page.evaluate(async () => {
+    const { createSiteNavigator } = await import("/src/site-navigator.js");
+    const record = document.querySelector(".record");
+    const wide = document.querySelector(".reference-wide");
+    const value = document.querySelector(".reference-value");
+    createSiteNavigator({
+      adapter: {
+        getIntent: () => ({ id: "test.smallest-reference" }),
+        activate: () => {},
+        applyState: () => {},
+        isReady: () => true,
+        verifyState: () => true,
+        resolveTarget: () => ({
+          exact: true,
+          target: record,
+          candidates: [
+            { exact: true, kind: "staff-record", precision: "record", target: record },
+            { exact: true, kind: "staff-heading", precision: "text", target: wide },
+            { exact: true, kind: "staff-pay-value", precision: "value", target: value },
+          ],
+        }),
+      },
+      documentRef: document,
+      focusOptions: { headerSelector: ".page-header" },
+      report: (state, descriptor) => {
+        document.documentElement.dataset.navigationState = state;
+        if (descriptor?.kind) document.documentElement.dataset.navigationKind = descriptor.kind;
+      },
+      windowRef: window,
+    }).start();
+  });
+
+  const value = page.locator(".reference-value");
+  await expect(page.locator("html")).toHaveAttribute("data-navigation-state", "focused");
+  await expect(page.locator("html")).toHaveAttribute("data-navigation-kind", "staff-pay-value");
+  await expect(value).toHaveClass(/is-navigation-focus/);
+  await expect(value).toHaveAttribute("data-verified-navigation-state", "visible");
+  await expect(page.locator(".record")).not.toHaveClass(/is-navigation-focus/);
+  await expect(page.locator(".reference-wide")).not.toHaveClass(/is-navigation-focus/);
+  const evidence = await value.evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    return {
+      bottom: rect.bottom,
+      surfaceScrollTop: document.querySelector(".surface").scrollTop,
+      top: rect.top,
+    };
+  });
+  expect(evidence.surfaceScrollTop).toBeGreaterThan(0);
+  expect(evidence.top).toBeGreaterThanOrEqual(96);
+  expect(evidence.bottom).toBeLessThanOrEqual(836);
+});
+
 test("waits for delayed content and retries a replaced shadow target", async ({ page }) => {
   await page.goto("/examples/basic/");
   await page.setContent(`
