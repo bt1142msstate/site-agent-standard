@@ -1,5 +1,40 @@
 const { test, expect } = require("@playwright/test");
 
+test("renders the standard instructional pointer, exact target, and anchored ripple", async ({ page }) => {
+  await page.goto("/examples/basic/");
+  await page.setContent(`
+    <link rel="stylesheet" href="/src/presentation.css">
+    <main style="min-height:1400px;padding-top:900px"><button data-target style="width:180px;height:64px">Run action</button></main>
+  `);
+  await page.evaluate(async () => {
+    const { createBrowserPresentationAdapter, createPresentationController } = await import("/src/presentation.js");
+    window.presentationClicks = 0;
+    const target = document.querySelector("[data-target]");
+    target.addEventListener("click", () => { window.presentationClicks += 1; });
+    const controller = createPresentationController({
+      adapter: createBrowserPresentationAdapter({ sounds: false }),
+      preset: { targetPauseMs: 0 },
+    });
+    await controller.click(target, { reducedMotion: true });
+  });
+  const pointer = page.locator("[data-site-agent-presentation-pointer]");
+  const target = page.locator("[data-target]");
+  await expect(pointer).toHaveClass(/is-visible/);
+  await expect(target).toHaveAttribute("data-site-agent-presentation-target", "");
+  await expect(page.locator("[data-site-agent-presentation-ripple]")).toHaveCount(1);
+  await expect.poll(() => page.evaluate(() => window.presentationClicks)).toBe(1);
+  const alignment = await page.evaluate(() => {
+    const pointer = document.querySelector("[data-site-agent-presentation-pointer]").getBoundingClientRect();
+    const ripple = document.querySelector("[data-site-agent-presentation-ripple]").getBoundingClientRect();
+    return {
+      x: Math.abs((pointer.left + 5) - (ripple.left + ripple.width / 2)),
+      y: Math.abs((pointer.top + 4) - (ripple.top + ripple.height / 2)),
+    };
+  });
+  expect(alignment.x).toBeLessThanOrEqual(1);
+  expect(alignment.y).toBeLessThanOrEqual(1);
+});
+
 async function activateImmediately(page, locator, touch) {
   const point = await locator.evaluate((element) => {
     const rect = element.getBoundingClientRect();

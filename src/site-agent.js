@@ -5,12 +5,14 @@ import {
   isCapabilityAuthorized,
 } from "./manifest.js";
 import { assertSchemaValue } from "./schema-validation.js";
+import { createPresentationController } from "./presentation.js";
 
 export * from "./manifest.js";
 export * from "./site-navigator.js";
 export * from "./navigation-progress.js";
 export * from "./bindings.js";
 export * from "./conformance.js";
+export * from "./presentation.js";
 
 function now() {
   return Date.now();
@@ -67,6 +69,14 @@ export function createSiteAgent(options = {}) {
   const getManifest = async () => assertSiteAgentManifest(
     typeof options.getManifest === "function" ? await options.getManifest() : manifest,
   );
+  const presentation = manifest.profiles.includes("presentation")
+    ? createPresentationController({
+      adapter: adapters.presentation,
+      preset: manifest.presentation,
+      muted: options.presentation?.muted,
+      report: options.report,
+    })
+    : null;
 
   async function invoke(profile, capabilityId, operation) {
     const startedAt = now();
@@ -88,6 +98,7 @@ export function createSiteAgent(options = {}) {
 
   return Object.freeze({
     manifest,
+    presentation,
     getConformance: () => getSiteAgentConformance(manifest),
     getCurrentConformance: async () => getSiteAgentConformance(await getManifest()),
     async getCapabilities() {

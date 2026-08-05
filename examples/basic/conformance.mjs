@@ -2,6 +2,7 @@ import { createSiteAgent } from "../../src/site-agent.js";
 
 export default function createConformanceTarget(manifest) {
   let planSequence = 0;
+  const presentationEvents = [];
   const createAgent = ({ permissions, expired = false }) => createSiteAgent({
     manifest,
     context: permissions === "authorized"
@@ -48,6 +49,13 @@ export default function createConformanceTarget(manifest) {
             },
         cancel: async () => ({ status: "canceled" }),
       },
+      presentation: {
+        mount: async () => presentationEvents.push("mount"),
+        move: async () => presentationEvents.push("move"),
+        click: async () => presentationEvents.push("click"),
+        type: async () => presentationEvents.push("type"),
+        clear: async () => presentationEvents.push("clear"),
+      },
     },
   });
 
@@ -76,6 +84,17 @@ export default function createConformanceTarget(manifest) {
         createAgent: () => createAgent({ permissions: "authorized", expired: true }),
         prepare: { actionId: "orders.archive", input: { orderReference: "opaque-expired" } },
         confirmation: true,
+      },
+      presentation: {
+        target: "opaque-presentation-target",
+        inputTarget: "opaque-presentation-input",
+        value: "Example",
+        verify: () => {
+          const expected = ["mount", "move", "click", "type", "clear"];
+          if (expected.some((event) => !presentationEvents.includes(event))) {
+            throw new Error("presentation-sequence-not-proven");
+          }
+        },
       },
       denial: { method: "query", request: { resourceId: "orders" } },
     },

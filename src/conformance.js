@@ -138,6 +138,18 @@ export async function runSiteAgentConformance(options = {}) {
     });
   }
 
+  if (declared.profiles.presentation) {
+    await runProof(proofs, "presentation.instructional-sequence", "presentation", async () => {
+      const testCase = requireCase(cases, "presentation");
+      if (!agent.presentation) throw new Error("presentation-controller-not-created");
+      await agent.presentation.mount();
+      await agent.presentation.click(testCase.target, { reducedMotion: true });
+      await agent.presentation.type(testCase.inputTarget, testCase.value, { reducedMotion: true });
+      await agent.presentation.clear();
+      if (typeof testCase.verify === "function") await testCase.verify();
+    });
+  }
+
   await runProof(proofs, "permission.denial", "core", async () => {
     const testCase = requireCase(cases, "denial");
     const method = deniedAgent[testCase.method];
@@ -154,6 +166,7 @@ export async function runSiteAgentConformance(options = {}) {
     proofs,
     executionVerified,
     fullyConformant: declared.declaredComplete && executionVerified,
+    tutorialConformant: declared.declaredTutorialComplete && executionVerified,
     errors: [...declared.errors, ...proofs.filter(({ status }) => status === "failed").map(({ id, failureCode }) => `${id}: ${failureCode}`)],
   };
 }

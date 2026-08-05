@@ -15,11 +15,30 @@
       "type": "array",
       "uniqueItems": true,
       "contains": { "const": "core" },
-      "items": { "enum": ["core", "query", "navigation", "action"] }
+      "items": { "enum": ["core", "query", "navigation", "action", "presentation"] }
     },
     "queryResources": { "type": "array", "items": { "$ref": "query.schema.json#/$defs/resource" } },
     "navigationDestinations": { "type": "array", "items": { "$ref": "navigation.schema.json#/$defs/destination" } },
     "actions": { "type": "array", "items": { "$ref": "action.schema.json#/$defs/action" } },
+    "presentation": {
+      "type": "object",
+      "required": ["preset", "cursor", "cursorMotion", "frameTarget", "clickFeedback", "clickSound", "scrollMotion", "inputPresentation", "typingSound", "responsiveVariants", "muteSupported", "reducedMotionSupported"],
+      "properties": {
+        "preset": { "type": "string", "minLength": 1 },
+        "cursor": { "type": "string", "minLength": 1 },
+        "cursorMotion": { "type": "string", "minLength": 1 },
+        "frameTarget": { "type": "string", "minLength": 1 },
+        "clickFeedback": { "type": "string", "minLength": 1 },
+        "clickSound": { "type": "string", "minLength": 1 },
+        "scrollMotion": { "type": "string", "minLength": 1 },
+        "inputPresentation": { "type": "string", "minLength": 1 },
+        "typingSound": { "type": "string", "minLength": 1 },
+        "responsiveVariants": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "enum": ["desktop", "tablet", "mobile"] } },
+        "muteSupported": { "const": true },
+        "reducedMotionSupported": { "const": true }
+      },
+      "additionalProperties": false
+    },
     "events": {
       "type": "array",
       "items": {
@@ -81,7 +100,7 @@
     "conformance": {
       "type": "object",
       "properties": {
-        "claims": { "type": "array", "uniqueItems": true, "items": { "enum": ["core", "query", "navigation", "action"] } },
+        "claims": { "type": "array", "uniqueItems": true, "items": { "enum": ["core", "query", "navigation", "action", "presentation"] } },
         "coverage": {
           "type": "object",
           "properties": {
@@ -95,5 +114,11 @@
     }
   },
   "patternProperties": { "^x-[a-z0-9._-]+$": true },
+  "allOf": [
+    {
+      "if": { "properties": { "profiles": { "type": "array", "contains": { "const": "presentation" } } } },
+      "then": { "properties": { "presentation": {} }, "required": ["presentation"] }
+    }
+  ],
   "additionalProperties": false
 }

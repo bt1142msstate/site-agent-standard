@@ -6,7 +6,7 @@
 
 Site Agent Standard is a transport-neutral contract for sites that want
 authorized software agents, deterministic automation, and tutorials to use the
-same capabilities as a person. It combines three independently conforming
+same capabilities as a person. It combines independently conforming
 profiles without collapsing them into one unsafe API:
 
 - **Query** returns bounded, permission-scoped information and opaque records.
@@ -14,6 +14,8 @@ profiles without collapsing them into one unsafe API:
   visible target.
 - **Action** previews, confirms, executes, audits, and verifies changes through
   the site's authoritative domain handlers.
+- **Presentation** optionally renders those capabilities with an instructional
+  cursor, framing, click ripple, visible typing, and local sound cues.
 
 The repository includes the normative 0.2 draft, a schema-validating reference
 runtime, executable CLI conformance proofs, MCP/WebMCP/Arazzo/AsyncAPI bindings,
@@ -43,6 +45,10 @@ instead of treating every revision change as a failed action.
 Version `0.6.0` adds the 0.2 draft: runtime JSON Schema enforcement, cursor and
 freshness semantics, live Query subscriptions, durable Action tasks, capability
 lifecycle metadata, executable conformance evidence, and standard bindings.
+
+Version `0.7.0` adds the optional first-party Presentation profile and browser
+adapter. Normal agents remain silent; tutorial runners can enable the shared
+pointer, ripple, motion, typing, and sound contract.
 
 ## Publish a manifest
 
@@ -86,6 +92,31 @@ const agent = createSiteAgent({
 The standard does not give the model a database path, CSS selector, arbitrary
 URL, or mutation envelope. Sites resolve semantic capability IDs and opaque
 references inside their own authorization boundary.
+
+## Instructional presentation
+
+```js
+import {
+  createBrowserPresentationAdapter,
+  createSiteAgent,
+} from "@bt1142msstate/site-agent-standard";
+import "@bt1142msstate/site-agent-standard/presentation.css";
+
+const agent = createSiteAgent({
+  manifest,
+  presentation: { muted: true },
+  adapters: {
+    ...adapters,
+    presentation: createBrowserPresentationAdapter({ sounds: true }),
+  },
+});
+
+await agent.presentation.click(document.querySelector("[data-example-target]"));
+```
+
+Presentation remains opt-in and muted by default for ordinary automation.
+Tutorial recording may enable sound, visible typing, and human-paced motion;
+reduced-motion and mute controls remain mandatory.
 
 ## Query, navigate, and act
 

@@ -124,7 +124,7 @@ test("full conformance requires and records executable host proofs", async () =>
   const result = await runSiteAgentConformance({ manifest, ...createConformanceTarget(manifest) });
   assert.equal(result.fullyConformant, true, JSON.stringify(result.errors));
   assert.equal(result.executionVerified, true);
-  assert.equal(result.proofs.length, 9);
+  assert.equal(result.proofs.length, 10);
   assert.ok(result.proofs.every(({ status }) => status === "passed"));
 });
 

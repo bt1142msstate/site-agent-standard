@@ -5,7 +5,21 @@
   "capabilityRevision": "example-orders-1",
   "id": "example.orders",
   "name": "Example order site",
-  "profiles": ["core", "query", "navigation", "action"],
+  "profiles": ["core", "query", "navigation", "action", "presentation"],
+  "presentation": {
+    "preset": "standard-instructional-v1",
+    "cursor": "modern-stemless-pointer",
+    "cursorMotion": "travel-pause-click",
+    "frameTarget": "settled-sticky-header-aware",
+    "clickFeedback": "target-outline-and-ripple",
+    "clickSound": "soft-tactile-ui-click-v1",
+    "scrollMotion": "tutorial-eased-nested-scroll-v1",
+    "inputPresentation": "visible-typing-with-keystroke-audio",
+    "typingSound": "ios-inspired-mobile-keyboard-tap-v1",
+    "responsiveVariants": ["desktop", "mobile"],
+    "muteSupported": true,
+    "reducedMotionSupported": true
+  },
   "queryResources": [
     {
       "id": "orders",

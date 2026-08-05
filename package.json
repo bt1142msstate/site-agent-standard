@@ -1,7 +1,7 @@
 {
   "name": "@bt1142msstate/site-agent-standard",
-  "version": "0.6.0",
-  "description": "A transport-neutral standard and reference runtime for permission-scoped site query, verified navigation, and safe actions.",
+  "version": "0.7.0",
+  "description": "A transport-neutral standard and reference runtime for permission-scoped query, verified navigation, safe actions, and instructional presentation.",
   "type": "module",
   "main": "./src/site-agent.js",
   "types": "./src/site-agent.d.ts",
@@ -29,6 +29,15 @@
       "types": "./src/conformance.d.ts",
       "import": "./src/conformance.js"
     },
+    "./presentation": {
+      "types": "./src/presentation.d.ts",
+      "import": "./src/presentation.js"
+    },
+    "./presentation-contract": {
+      "import": "./src/presentation-contract.cjs",
+      "require": "./src/presentation-contract.cjs"
+    },
+    "./presentation.css": "./src/presentation.css",
     "./navigation-progress.css": "./src/navigation-progress.css",
     "./schemas/manifest": "./spec/0.2/schemas/manifest.schema.json",
     "./schemas/query": "./spec/0.2/schemas/query.schema.json",
@@ -60,6 +69,8 @@
     "query",
     "actions",
     "navigation",
+    "presentation",
+    "tutorials",
     "accessibility",
     "automation",
     "scroll",

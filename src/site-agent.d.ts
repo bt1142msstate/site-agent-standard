@@ -1,4 +1,4 @@
-export type SiteAgentProfile = "core" | "query" | "navigation" | "action";
+export type SiteAgentProfile = "core" | "query" | "navigation" | "action" | "presentation";
 export type CapabilityVisibility = "public" | "authenticated";
 export type TargetPrecision = "control" | "field" | "record" | "record-page" | "surface";
 export type ActionRisk = "read" | "reversible" | "consequential" | "destructive";
@@ -90,6 +90,20 @@ export interface SiteAgentManifest {
   queryResources: QueryResource[];
   navigationDestinations: NavigationDestination[];
   actions: SiteAction[];
+  presentation?: {
+    preset: string;
+    cursor: string;
+    cursorMotion: string;
+    frameTarget: string;
+    clickFeedback: string;
+    clickSound: string;
+    scrollMotion: string;
+    inputPresentation: string;
+    typingSound: string;
+    responsiveVariants: string[];
+    muteSupported: boolean;
+    reducedMotionSupported: boolean;
+  };
   events?: SiteAgentEvent[];
   workflows?: SiteAgentWorkflow[];
   bindings?: Record<string, unknown>;
@@ -99,6 +113,8 @@ export interface SiteAgentManifest {
   };
   [extension: `x-${string}`]: unknown;
 }
+
+export * from "./presentation.js";
 
 export interface SiteAgentContext {
   authenticated: boolean;
@@ -185,7 +201,17 @@ export interface SiteAgentOptions {
       getTask?(input: unknown): unknown | Promise<unknown>;
       cancelTask?(input: unknown): unknown | Promise<unknown>;
     };
+    presentation?: {
+      mount(input: unknown): unknown | Promise<unknown>;
+      move(input: unknown): unknown | Promise<unknown>;
+      click(input: unknown): unknown | Promise<unknown>;
+      type(input: unknown): unknown | Promise<unknown>;
+      clear?(input: unknown): unknown | Promise<unknown>;
+      destroy?(input: unknown): unknown | Promise<unknown>;
+      setMuted?(muted: boolean): void;
+    };
   };
+  presentation?: { muted?: boolean };
   report?: (event: { profile: string; capabilityId: string; status: string; durationMs: number; failureCode: string }) => void;
 }
 

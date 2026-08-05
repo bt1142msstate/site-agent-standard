@@ -19,6 +19,9 @@ database schema, or a required browser or network transport.
   exact visible target without an inferred DOM fallback.
 - **Action** defines schema-validated prepare, confirm, cancel, reconciliation,
   audit, and optional durable-task stages through authoritative host handlers.
+- **Presentation** optionally renders instructional cursor travel, exact target
+  framing, click feedback, visible typing, local sound cues, mute, and reduced
+  motion. See [Presentation](presentation.md).
 
 ## Version and capability lifecycle
 

@@ -8,8 +8,10 @@
   human-action coverage. This is an inventory assertion, not conformance proof.
 - **Execution verified** means the applicable profile proofs ran against a host
   adapter and passed without privileged test shortcuts.
-- **Fully conformant** requires structural validity, all three profiles,
+- **Fully conformant** requires structural validity, Query, Navigation, and Action,
   declared completeness, and execution verification.
+- **Tutorial conformant** additionally requires the Presentation profile and its
+  desktop and touch-mobile browser proofs.
 
 The CLI MUST NOT report full conformance without an executable adapter.
 
@@ -36,6 +38,9 @@ The CLI MUST NOT report full conformance without an executable adapter.
 9. Verify public discovery and every generated binding contain no authenticated
    capability, private extension, selector, storage path, database path,
    credential, private identifier, or tested record content.
+10. When Presentation is claimed, prove cursor travel before action, exact
+    target framing, hotspot/ripple anchoring, visible typing events, mute,
+    reduced motion, cleanup, and desktop plus touch-mobile rendering.
 
 An exporter that claims compatibility with another protocol MUST validate its
 generated artifact against that protocol's official schema when one exists and

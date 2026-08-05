@@ -2,7 +2,7 @@ import { validateSchemaDefinition } from "./schema-validation.js";
 
 export const SITE_AGENT_STANDARD_VERSION = "0.2";
 export const SITE_AGENT_SUPPORTED_VERSIONS = Object.freeze(["0.1", "0.2"]);
-export const SITE_AGENT_PROFILES = Object.freeze(["core", "query", "navigation", "action"]);
+export const SITE_AGENT_PROFILES = Object.freeze(["core", "query", "navigation", "action", "presentation"]);
 
 export function negotiateSiteAgentVersion(offeredVersions, supportedVersions = SITE_AGENT_SUPPORTED_VERSIONS) {
   const offered = Array.isArray(offeredVersions) ? offeredVersions : [offeredVersions];
@@ -102,6 +102,31 @@ function validateManifestInternal(manifest, options = {}) {
   if (!options.publicDocument && manifest.profiles?.includes("query") && !queryResources.length) errors.push("The query profile requires queryResources.");
   if (!options.publicDocument && manifest.profiles?.includes("navigation") && !destinations.length) errors.push("The navigation profile requires navigationDestinations.");
   if (!options.publicDocument && manifest.profiles?.includes("action") && !actions.length) errors.push("The action profile requires actions.");
+  if (manifest.profiles?.includes("presentation")) {
+    const presentation = manifest.presentation;
+    if (!isObject(presentation)) {
+      errors.push("The presentation profile requires a presentation declaration.");
+    } else {
+      for (const field of [
+        "preset",
+        "cursor",
+        "cursorMotion",
+        "frameTarget",
+        "clickFeedback",
+        "clickSound",
+        "scrollMotion",
+        "inputPresentation",
+        "typingSound",
+      ]) {
+        if (!String(presentation[field] || "").trim()) errors.push(`presentation.${field} is required.`);
+      }
+      if (!Array.isArray(presentation.responsiveVariants) || !presentation.responsiveVariants.length) {
+        errors.push("presentation.responsiveVariants must not be empty.");
+      }
+      if (presentation.muteSupported !== true) errors.push("presentation.muteSupported must be true.");
+      if (presentation.reducedMotionSupported !== true) errors.push("presentation.reducedMotionSupported must be true.");
+    }
+  }
 
   const destinationIds = new Set();
   destinations.forEach((destination, index) => {
@@ -316,7 +341,9 @@ export function getSiteAgentConformance(manifest) {
     profiles,
     coverage,
     declaredComplete,
+    declaredTutorialComplete: declaredComplete && profiles.presentation,
     executionVerified: false,
     fullyConformant: false,
+    tutorialConformant: false,
   };
 }
