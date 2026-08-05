@@ -58,6 +58,11 @@ the browser adapter and offline recorder share exact click and keyboard sound
 generation, nested framing matches tutorial motion, and audible mode is applied
 correctly at controller creation.
 
+Version `0.10.0` adds ordered exact Navigation candidates. A host can prefer a
+complete record while declaring a concise value, field, control, or text
+fallback. The runtime chooses the first candidate that fits the actual visible
+region and never invents a descendant through DOM inference.
+
 ## Publish a manifest
 
 Serve a public-only discovery document at `/site-agent.json` and advertise it:

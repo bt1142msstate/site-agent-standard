@@ -27,7 +27,9 @@ The CLI MUST NOT report full conformance without an executable adapter.
    rendered state; raw wrapper fragments are not valid evidence.
 4. Apply and verify all Navigation state before resolving, revealing, focusing,
    and highlighting the smallest target at desktop, tablet-touch, and
-   mobile-touch sizes.
+   mobile-touch sizes. Prove that an oversized preferred target yields to the
+   next declared precise candidate, while an undeclared DOM descendant is never
+   selected.
 5. Prepare and confirm an Action, reject duplicate confirmation, validate the
    completed output, requery affected state, and navigate to the result.
 6. Reconcile equivalent and non-conflicting changes, require a replacement

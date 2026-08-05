@@ -148,6 +148,67 @@ test("navigates a clipped, transformed drawer with nested two-axis scrolling", a
   expect(evidence.y).toBeGreaterThan(0);
 });
 
+test("uses a declared concise text target when the preferred record cannot fit", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/examples/basic/");
+  await page.setContent(`
+    <style>
+      body { margin: 0; }
+      .page-header { position: fixed; inset: 0 0 auto; height: 88px; z-index: 10; background: white; }
+      .surface { position: fixed; inset: 100px 12px 12px; overflow: auto; }
+      .before { height: 760px; }
+      .record { box-sizing: border-box; min-height: 1100px; padding: 24px; background: white; }
+      .record-title { display: block; width: fit-content; font-size: 22px; }
+      .is-navigation-focus { outline: 4px solid #1684b3; outline-offset: 4px; }
+    </style>
+    <header class="page-header">Header</header>
+    <main class="surface"><div class="before"></div><article class="record">
+      <h2 class="record-title">The exact answer</h2>
+      <div style="height:1000px">Long record details</div>
+    </article></main>
+  `);
+  await page.evaluate(async () => {
+    const { createSiteNavigator } = await import("/src/site-navigator.js");
+    const record = document.querySelector(".record");
+    const title = document.querySelector(".record-title");
+    createSiteNavigator({
+      adapter: {
+        getIntent: () => ({ id: "test.concise-target" }),
+        activate: () => {},
+        applyState: () => {},
+        isReady: () => true,
+        verifyState: () => true,
+        resolveTarget: () => ({
+          exact: true,
+          target: record,
+          candidates: [
+            { exact: true, kind: "record", precision: "record", target: record },
+            { exact: true, kind: "record-title", precision: "text", target: title },
+          ],
+        }),
+      },
+      documentRef: document,
+      focusOptions: { headerSelector: ".page-header" },
+      report: (state, descriptor) => {
+        document.documentElement.dataset.navigationState = state;
+        if (descriptor?.kind) document.documentElement.dataset.navigationKind = descriptor.kind;
+      },
+      windowRef: window,
+    }).start();
+  });
+
+  await expect(page.locator("html")).toHaveAttribute("data-navigation-state", "focused");
+  await expect(page.locator("html")).toHaveAttribute("data-navigation-kind", "record-title");
+  await expect(page.locator(".record-title")).toHaveAttribute("data-verified-navigation-state", "visible");
+  await expect(page.locator(".record-title")).toBeFocused();
+  await expect(page.locator(".record")).not.toHaveClass(/is-navigation-focus/);
+  const visible = await page.locator(".record-title").evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    return rect.top >= 96 && rect.bottom <= innerHeight - 8;
+  });
+  expect(visible).toBe(true);
+});
+
 test("waits for delayed content and retries a replaced shadow target", async ({ page }) => {
   await page.goto("/examples/basic/");
   await page.setContent(`

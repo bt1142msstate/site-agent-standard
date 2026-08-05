@@ -5,6 +5,7 @@ import {
   createSiteNavigator,
   focusVerifiedNavigationTarget,
   isVerifiedNavigationTargetVisible,
+  selectBestNavigationTarget,
 } from "../../src/site-navigator.js";
 
 function createClassList() {
@@ -15,6 +16,62 @@ function createClassList() {
     remove: (value) => values.delete(value),
   };
 }
+
+test("ordered exact targets fall back from an oversized record to declared text", () => {
+  const ownerDocument = { body: {}, querySelector: () => null };
+  const record = {
+    isConnected: true,
+    ownerDocument,
+    parentElement: null,
+    getBoundingClientRect: () => ({ top: 0, bottom: 1200, left: 0, right: 360, height: 1200, width: 360 }),
+  };
+  const text = {
+    isConnected: true,
+    ownerDocument,
+    parentElement: record,
+    getBoundingClientRect: () => ({ top: 80, bottom: 120, left: 20, right: 280, height: 40, width: 260 }),
+  };
+  const selected = selectBestNavigationTarget({
+    exact: true,
+    target: record,
+    candidates: [
+      { exact: true, kind: "order-record", precision: "record", target: record },
+      { exact: true, kind: "order-title", precision: "text", target: text },
+    ],
+  }, {
+    windowRef: {
+      innerHeight: 700,
+      innerWidth: 390,
+      getComputedStyle: () => ({ overflowX: "visible", overflowY: "visible", position: "static" }),
+    },
+  });
+
+  assert.equal(selected.target, text);
+  assert.equal(selected.kind, "order-title");
+  assert.equal(selected.candidateIndex, 1);
+  assert.equal(selected.selectionReason, "first-fully-visible-candidate");
+});
+
+test("target selection never invents an undeclared descendant", () => {
+  const ownerDocument = { body: {}, querySelector: () => null };
+  const record = {
+    isConnected: true,
+    ownerDocument,
+    parentElement: null,
+    getBoundingClientRect: () => ({ top: 0, bottom: 1200, left: 0, right: 360, height: 1200, width: 360 }),
+    querySelector: () => ({ id: "undeclared-title" }),
+  };
+  const selected = selectBestNavigationTarget({ exact: true, kind: "record", target: record }, {
+    windowRef: {
+      innerHeight: 700,
+      innerWidth: 390,
+      getComputedStyle: () => ({ overflowX: "visible", overflowY: "visible", position: "static" }),
+    },
+  });
+
+  assert.equal(selected.target, record);
+  assert.equal(selected.selectionReason, "least-overflow-candidate");
+});
 
 test("site navigators center nested mobile scroll surfaces and retain focus", () => {
   const calls = [];

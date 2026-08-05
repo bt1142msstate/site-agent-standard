@@ -1,9 +1,18 @@
-export interface NavigationDescriptor {
+export type NavigationTargetPrecision = "value" | "control" | "field" | "text" | "record" | "section" | "surface";
+
+export interface NavigationTargetCandidate {
   target: Element;
   focusTarget?: HTMLElement;
   highlightTarget?: HTMLElement;
   exact?: boolean;
   kind?: string;
+  precision?: NavigationTargetPrecision;
+}
+
+export interface NavigationDescriptor extends NavigationTargetCandidate {
+  candidates?: NavigationTargetCandidate[];
+  candidateIndex?: number;
+  selectionReason?: "first-fully-visible-candidate" | "unmeasured-candidate" | "least-overflow-candidate";
 }
 
 export interface NavigationIntent<State = unknown> {
@@ -102,6 +111,10 @@ export type NavigationTour = NavigationProgress;
 
 export declare function isVerifiedNavigationTargetVisible(options: FocusNavigationOptions): boolean;
 export declare function focusVerifiedNavigationTarget(options: FocusNavigationOptions): boolean;
+export declare function selectBestNavigationTarget(
+  descriptor: NavigationDescriptor | null,
+  options?: Pick<FocusNavigationOptions, "headerSelector" | "margin" | "windowRef">,
+): NavigationDescriptor | null;
 export declare function createNavigationProgress(options?: NavigationProgressOptions): NavigationProgress;
 /** @deprecated Use createNavigationProgress. */
 export declare const createNavigationTour: typeof createNavigationProgress;

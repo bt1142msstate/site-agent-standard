@@ -1,6 +1,7 @@
 export type SiteAgentProfile = "core" | "query" | "navigation" | "action" | "presentation";
 export type CapabilityVisibility = "public" | "authenticated";
 export type TargetPrecision = "control" | "field" | "record" | "record-page" | "surface";
+export type NavigationCandidatePrecision = "value" | "control" | "field" | "text" | "record" | "section" | "surface";
 export type ActionRisk = "read" | "reversible" | "consequential" | "destructive";
 export type ConfirmationKind = "none" | "explicit" | "typed";
 export type ActionReconciliationStatus = "confirmed" | "already-applied" | "reconfirmation-required";
@@ -56,6 +57,12 @@ export interface NavigationDestination extends SiteAgentCapability {
   exact: true;
   targetKinds: string[];
   stateSchema?: Record<string, unknown>;
+  targetSelection?: {
+    order: NavigationCandidatePrecision[];
+    oversized: "next-declared-candidate";
+    requireFullyVisible: true;
+    inferredDomFallback: false;
+  };
 }
 
 export interface SiteAction extends SiteAgentCapability {

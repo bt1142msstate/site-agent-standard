@@ -32,3 +32,11 @@ test("the normative JSON Schema rejects an unversioned broad destination", () =>
   assert.ok(validate.errors.some(({ instancePath, keyword }) => instancePath === "" && keyword === "required"));
   assert.ok(validate.errors.some(({ instancePath }) => instancePath.endsWith("/exact")));
 });
+
+test("the normative JSON Schema requires explicit safe target-selection behavior", () => {
+  const validate = validator();
+  const example = readJson(path.join(root, "examples/basic/site-agent.json"));
+  example.navigationDestinations[0].targetSelection.inferredDomFallback = true;
+  assert.equal(validate(example), false);
+  assert.ok(validate.errors.some(({ instancePath }) => instancePath.endsWith("/inferredDomFallback")));
+});

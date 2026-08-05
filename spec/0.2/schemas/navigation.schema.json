@@ -19,7 +19,23 @@
         "precision": { "enum": ["control", "field", "record", "record-page", "surface"] },
         "exact": { "const": true },
         "targetKinds": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string" } },
-        "stateSchema": { "type": "object" }
+        "stateSchema": { "type": "object" },
+        "targetSelection": {
+          "type": "object",
+          "required": ["order", "oversized", "requireFullyVisible", "inferredDomFallback"],
+          "properties": {
+            "order": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": { "enum": ["value", "control", "field", "text", "record", "section", "surface"] }
+            },
+            "oversized": { "const": "next-declared-candidate" },
+            "requireFullyVisible": { "const": true },
+            "inferredDomFallback": { "const": false }
+          },
+          "additionalProperties": false
+        }
       },
       "patternProperties": { "^x-[a-z0-9._-]+$": true },
       "additionalProperties": false

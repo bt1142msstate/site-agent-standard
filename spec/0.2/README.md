@@ -86,6 +86,22 @@ projected into:
 
 Bindings MUST NOT expose host selectors, database paths, credentials, or permit
 a transport to bypass Action confirmation and authoritative handlers.
+
+## Exact target selection
+
+A Navigation adapter MAY return an ordered set of exact semantic target
+candidates. Candidate order expresses the host application's preferred level
+of detail. The runtime selects the first candidate that can be shown fully in
+the active visible region, including clipping containers, dialogs, sticky
+headers, and the visual viewport. When a preferred card or section is too large,
+the adapter MUST declare a smaller value, field, control, or text element; the
+runtime then frames and highlights that candidate instead of leaving the user
+with a partially visible container.
+
+Candidate resolution is host-declared. A runtime MUST NOT search arbitrary DOM
+text, infer a selector, or substitute an undeclared descendant. If no declared
+candidate can be resolved, Navigation fails rather than highlighting a broad or
+unrelated surface.
 Arazzo projections MUST reference a valid OpenAPI, AsyncAPI, or Arazzo source
 description and resolvable source operations; a Site Agent capability ID alone
 is not an Arazzo operation.

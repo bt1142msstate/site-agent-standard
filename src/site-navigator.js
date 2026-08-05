@@ -7,6 +7,10 @@ function getParentElement(target) {
   return target?.parentElement || target?.getRootNode?.()?.host || null;
 }
 
+function isConnectedTarget(target) {
+  return Boolean(target && target.isConnected !== false);
+}
+
 function findComposedAncestor(target, selector) {
   let current = target;
   while (current) {
@@ -125,16 +129,92 @@ function getViewportBounds(target, windowRef, margin = 8, headerSelector = ".sit
   };
 }
 
+function getVisibleBounds(target, windowRef, margin = 8, headerSelector = ".site-header") {
+  return getClippingAncestors(target, windowRef).reduce((currentBounds, ancestor) => {
+    const ancestorRect = ancestor.getBoundingClientRect?.();
+    return ancestorRect ? intersectBounds(currentBounds, ancestorRect) : currentBounds;
+  }, getViewportBounds(target, windowRef, margin, headerSelector));
+}
+
+function getCandidateFit(candidate, windowRef, options = {}) {
+  const geometryTarget = candidate?.highlightTarget || candidate?.target;
+  const rect = geometryTarget?.getBoundingClientRect?.();
+  if (!rect) return { fits: null, overflow: 0 };
+  const bounds = getVisibleBounds(
+    geometryTarget,
+    windowRef,
+    Number(options.margin ?? 8),
+    options.headerSelector,
+  );
+  const availableHeight = Math.max(0, bounds.bottom - bounds.top);
+  const availableWidth = Math.max(0, bounds.right - bounds.left);
+  const heightOverflow = Math.max(0, Number(rect.height || 0) - availableHeight);
+  const widthOverflow = Math.max(0, Number(rect.width || 0) - availableWidth);
+  return {
+    fits: Number(rect.height || 0) > 0 && Number(rect.width || 0) > 0
+      && heightOverflow === 0 && widthOverflow === 0,
+    overflow: (heightOverflow / Math.max(1, availableHeight))
+      + (widthOverflow / Math.max(1, availableWidth)),
+  };
+}
+
+function normalizeTargetCandidates(descriptor) {
+  if (descriptor?.exact !== true) return [];
+  const declared = Array.isArray(descriptor?.candidates) ? descriptor.candidates : [];
+  const candidates = declared.length ? declared : [descriptor];
+  return candidates
+    .filter((candidate) => candidate?.target && isConnectedTarget(candidate.target))
+    .filter((candidate) => candidate.exact !== false)
+    .map((candidate, candidateIndex) => ({
+      ...descriptor,
+      ...candidate,
+      candidateIndex,
+      candidates: undefined,
+      exact: true,
+    }));
+}
+
+/**
+ * Selects from host-declared semantic targets without inferring meaning from
+ * the DOM. Candidate order expresses host preference; an oversized candidate
+ * yields to the next declared candidate that can be shown in full.
+ */
+export function selectBestNavigationTarget(descriptor, options = {}) {
+  if (descriptor?.exact !== true) return descriptor || null;
+  const windowRef = options.windowRef || globalThis;
+  const candidates = normalizeTargetCandidates(descriptor);
+  if (!candidates.length) return null;
+  let leastOverflowCandidate = null;
+  let leastOverflow = Number.POSITIVE_INFINITY;
+  let firstUnknownCandidate = null;
+
+  for (const candidate of candidates) {
+    const fit = getCandidateFit(candidate, windowRef, options);
+    if (fit.fits === true) {
+      return { ...candidate, selectionReason: "first-fully-visible-candidate" };
+    }
+    if (fit.fits == null && !firstUnknownCandidate) firstUnknownCandidate = candidate;
+    if (fit.fits === false && fit.overflow < leastOverflow) {
+      leastOverflow = fit.overflow;
+      leastOverflowCandidate = candidate;
+    }
+  }
+
+  if (firstUnknownCandidate) {
+    return { ...firstUnknownCandidate, selectionReason: "unmeasured-candidate" };
+  }
+  return leastOverflowCandidate
+    ? { ...leastOverflowCandidate, selectionReason: "least-overflow-candidate" }
+    : null;
+}
+
 export function isVerifiedNavigationTargetVisible(options = {}) {
   const target = options.target;
   const windowRef = options.windowRef || globalThis;
   const rect = target?.getBoundingClientRect?.();
   if (!rect) return false;
   const margin = Number(options.margin ?? 8);
-  const bounds = getClippingAncestors(target, windowRef).reduce((currentBounds, ancestor) => {
-    const ancestorRect = ancestor.getBoundingClientRect?.();
-    return ancestorRect ? intersectBounds(currentBounds, ancestorRect) : currentBounds;
-  }, getViewportBounds(target, windowRef, margin, options.headerSelector));
+  const bounds = getVisibleBounds(target, windowRef, margin, options.headerSelector);
   const availableHeight = Math.max(0, bounds.bottom - bounds.top);
   const availableWidth = Math.max(0, bounds.right - bounds.left);
   const verticallyVisible = rect.height > availableHeight
@@ -393,7 +473,10 @@ export function createSiteNavigator(options = {}) {
     report("locating");
     let descriptor = null;
     try {
-      descriptor = await adapter.resolveTarget(context);
+      descriptor = selectBestNavigationTarget(await adapter.resolveTarget(context), {
+        ...options.focusOptions,
+        windowRef,
+      });
     } catch (error) {
       retry("adapter-error", null, String(error?.code || error?.message || "adapter-error"));
       return;

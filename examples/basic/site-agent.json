@@ -74,6 +74,12 @@
       "precision": "record",
       "exact": true,
       "targetKinds": ["order"],
+      "targetSelection": {
+        "order": ["record", "text"],
+        "oversized": "next-declared-candidate",
+        "requireFullyVisible": true,
+        "inferredDomFallback": false
+      },
       "stateSchema": {
         "type": "object",
         "properties": { "period": { "type": "string" }, "status": { "type": "string" } },
