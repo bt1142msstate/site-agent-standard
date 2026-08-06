@@ -15,6 +15,7 @@ export * from "./conformance.js";
 export * from "./presentation.js";
 export * from "./rendered-quality.js";
 export * from "./artifact-contract.js";
+export * from "./tutorial-runtime.js";
 
 function now() {
   return Date.now();

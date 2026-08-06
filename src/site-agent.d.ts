@@ -168,6 +168,7 @@ export * from "./presentation.js";
 export * from "./presentation-audio.js";
 export * from "./rendered-quality.js";
 export * from "./artifact-contract.js";
+export * from "./tutorial-runtime.js";
 
 export interface SiteAgentContext {
   authenticated: boolean;

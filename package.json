@@ -1,6 +1,6 @@
 {
   "name": "@bt1142msstate/site-agent-standard",
-  "version": "0.12.0",
+  "version": "0.12.1",
   "description": "A transport-neutral standard and reference runtime for permission-scoped query, verified navigation, safe actions, and instructional presentation.",
   "type": "module",
   "main": "./src/site-agent.js",
@@ -44,6 +44,10 @@
     "./artifact-contract": {
       "types": "./src/artifact-contract.d.ts",
       "import": "./src/artifact-contract.js"
+    },
+    "./tutorial-runtime": {
+      "types": "./src/tutorial-runtime.d.ts",
+      "import": "./src/tutorial-runtime.js"
     },
     "./presentation-contract": {
       "import": "./src/presentation-contract.cjs",

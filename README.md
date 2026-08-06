@@ -73,8 +73,8 @@ host-declared semantic path through the outer route and nested resource to the
 exact source target. The runtime verifies every step and rejects results that
 stop at a wrapper, link, viewer shell, or document cover.
 
-Version `0.12.0` adds rendered visual-quality evidence, synchronized
-multi-actor tutorial contexts, stable timestamp-insensitive source
+Version `0.12.1` adds rendered visual-quality evidence, a shared synchronized
+runtime for multi-actor tutorial contexts, stable timestamp-insensitive source
 fingerprints, and complete media/deployment acceptance evidence. Conformance
 now requires computed-browser-style label and contrast checks across every
 mapped state, responsive variant, and supported theme; accessibility names

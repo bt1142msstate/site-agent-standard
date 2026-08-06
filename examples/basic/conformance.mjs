@@ -1,4 +1,4 @@
-import { createSiteAgent } from "../../src/site-agent.js";
+import { createSiteAgent, runSynchronizedTutorial } from "../../src/site-agent.js";
 
 export default function createConformanceTarget(manifest) {
   let planSequence = 0;
@@ -155,18 +155,28 @@ export default function createConformanceTarget(manifest) {
         }),
       },
       multiActor: {
-        verify: ({ workflows }) => ({
-          source: "synchronized-browser-contexts",
-          observations: workflows.flatMap((workflow) => workflow.steps.map((step, index) => ({
-            workflowId: workflow.id,
-            stepId: step.id,
-            actorId: step.actorId,
-            contextId: step.contextId,
-            startedAtMs: index * 1000,
-            completedAtMs: (index * 1000) + 800,
-            barrierVerified: true,
-          }))),
-        }),
+        verify: async ({ workflows }) => {
+          let currentMs = 0;
+          const context = () => ({
+            startRecording: async () => {},
+            synchronize: async () => true,
+            stopRecording: async () => ({ complete: true }),
+          });
+          const results = [];
+          for (const workflow of workflows) {
+            results.push(await runSynchronizedTutorial({
+              workflow,
+              contexts: { client: context(), operations: context() },
+              clock: () => currentMs,
+              execute: async () => { currentMs += 800; },
+            }));
+            currentMs += 200;
+          }
+          return {
+            source: "synchronized-browser-contexts",
+            observations: results.flatMap(({ observations }) => observations),
+          };
+        },
       },
       denial: { method: "query", request: { resourceId: "orders" } },
     },
