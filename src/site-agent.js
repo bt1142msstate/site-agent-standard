@@ -13,6 +13,8 @@ export * from "./navigation-progress.js";
 export * from "./bindings.js";
 export * from "./conformance.js";
 export * from "./presentation.js";
+export * from "./rendered-quality.js";
+export * from "./artifact-contract.js";
 
 function now() {
   return Date.now();

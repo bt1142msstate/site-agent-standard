@@ -40,3 +40,20 @@ test("the normative JSON Schema requires explicit safe target-selection behavior
   assert.equal(validate(example), false);
   assert.ok(validate.errors.some(({ instancePath }) => instancePath.endsWith("/inferredDomFallback")));
 });
+
+test("the normative JSON Schema requires rendered quality and complete multi-actor declarations", () => {
+  const validate = validator();
+  const example = readJson(path.join(root, "examples/basic/site-agent.json"));
+  delete example.presentation.supportedThemes;
+  assert.equal(validate(example), false);
+  assert.ok(validate.errors.some(({ instancePath, keyword }) => (
+    instancePath === "/presentation" && keyword === "required"
+  )));
+
+  const incompleteActors = readJson(path.join(root, "examples/basic/site-agent.json"));
+  delete incompleteActors.workflows[0].contexts;
+  assert.equal(validate(incompleteActors), false);
+  assert.ok(validate.errors.some(({ instancePath, keyword }) => (
+    instancePath.endsWith("/workflows/0") && keyword === "required"
+  )));
+});

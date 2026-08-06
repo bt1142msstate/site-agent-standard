@@ -11,7 +11,10 @@ import {
   negotiateSiteAgentVersion,
   registerWebMcpTools,
   runSiteAgentConformance,
+  stableFingerprintPayload,
+  validateRenderedQualityEvidence,
   validateSiteAgentManifest,
+  validateTutorialArtifactAcceptanceEvidence,
 } from "../../src/site-agent.js";
 import createConformanceTarget from "../../examples/basic/conformance.mjs";
 
@@ -25,6 +28,80 @@ test("0.2 validates declared schemas and lifecycle metadata", () => {
   assert.equal(validateSiteAgentManifest(manifest).valid, false);
   assert.equal(negotiateSiteAgentVersion(["0.1", "0.2"]), "0.2");
   assert.equal(negotiateSiteAgentVersion(["9.0"]), null);
+});
+
+test("presentation requires computed-style quality coverage and valid multi-actor context ownership", () => {
+  const manifest = example();
+  assert.equal(validateSiteAgentManifest(manifest).valid, true);
+
+  const missingQuality = example();
+  delete missingQuality.presentation.visualQuality;
+  assert.match(validateSiteAgentManifest(missingQuality).errors.join("\n"), /visualQuality is required/);
+
+  const mismatchedActor = example();
+  mismatchedActor.workflows[0].steps[0].actorId = "operator";
+  assert.match(validateSiteAgentManifest(mismatchedActor).errors.join("\n"), /does not own contextId client/);
+});
+
+test("stable fingerprints ignore generator timestamps but retain meaningful content", () => {
+  const first = stableFingerprintPayload([{ path: "generated.json", value: {
+    generatedAt: "2026-08-01T00:00:00.000Z",
+    controls: [{ id: "save", label: "Save" }],
+  } }]);
+  const timestampOnly = stableFingerprintPayload([{ path: "generated.json", value: {
+    generatedAt: "2026-08-06T00:00:00.000Z",
+    controls: [{ id: "save", label: "Save" }],
+  } }]);
+  const changed = stableFingerprintPayload([{ path: "generated.json", value: {
+    generatedAt: "2026-08-06T00:00:00.000Z",
+    controls: [{ id: "save", label: "Publish" }],
+  } }]);
+  assert.equal(first, timestampOnly);
+  assert.notEqual(first, changed);
+});
+
+test("rendered-quality and tutorial artifact evidence reject incomplete matrices and media", () => {
+  const manifest = example();
+  const matrix = manifest.workflows[0].steps.flatMap((step) => (
+    manifest.presentation.responsiveVariants.flatMap((viewport) => (
+      manifest.presentation.supportedThemes.map((theme) => ({
+        mappedStateId: `${manifest.workflows[0].id}:${step.id}`,
+        viewport,
+        theme,
+        computedStyles: true,
+        labelsChecked: 1,
+        textContrastChecks: 1,
+        violations: [],
+      }))
+    ))
+  ));
+  assert.equal(validateRenderedQualityEvidence(manifest, {
+    source: "browser-computed-style",
+    observations: matrix,
+  }).valid, true);
+  assert.equal(validateRenderedQualityEvidence(manifest, {
+    source: "browser-computed-style",
+    observations: matrix.slice(1),
+  }).valid, false);
+
+  const evidence = {
+    timelineDurationMs: 4000,
+    sourceFingerprint: { algorithm: "sha256", normalization: "stable-content-v1", digest: "a".repeat(64) },
+    media: {
+      video: { decodedFullDuration: true, durationMs: 4000 },
+      audio: { required: true, present: true, decodedFullDuration: true, durationMs: 4000 },
+    },
+    integrity: { verified: true },
+    deployment: { isolated: true, cleanBeforeWrite: true, symlinkFree: true, pathClass: "generated-artifact" },
+  };
+  assert.equal(validateTutorialArtifactAcceptanceEvidence(evidence).valid, true);
+  assert.match(
+    validateTutorialArtifactAcceptanceEvidence({
+      ...evidence,
+      media: { ...evidence.media, audio: { ...evidence.media.audio, decodedFullDuration: false } },
+    }).errors.join("\n"),
+    /audio-full-decode-required/,
+  );
 });
 
 test("local static Query resources require materialized user-surface provenance", () => {
@@ -246,7 +323,7 @@ test("full conformance requires and records executable host proofs", async () =>
   const result = await runSiteAgentConformance({ manifest, ...createConformanceTarget(manifest) });
   assert.equal(result.fullyConformant, true, JSON.stringify(result.errors));
   assert.equal(result.executionVerified, true);
-  assert.equal(result.proofs.length, 10);
+  assert.equal(result.proofs.length, 13);
   assert.ok(result.proofs.every(({ status }) => status === "passed"));
 });
 

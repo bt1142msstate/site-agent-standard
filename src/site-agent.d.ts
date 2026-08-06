@@ -95,9 +95,25 @@ export interface SiteAgentEvent extends SiteAgentCapability {
 }
 
 export interface SiteAgentWorkflow extends SiteAgentCapability {
+  actors?: Array<{
+    id: string;
+    role: string;
+  }>;
+  contexts?: Array<{
+    id: string;
+    actorId: string;
+    kind: "client" | "operations";
+  }>;
+  synchronization?: {
+    timeline: "shared-monotonic";
+    barriers: "step-boundaries";
+    recording: "all-contexts";
+  };
   steps: Array<{
     id: string;
     capabilityId: string;
+    actorId?: string;
+    contextId?: string;
     dependsOn?: string[];
     onSuccess?: string;
     onFailure?: string;
@@ -126,6 +142,15 @@ export interface SiteAgentManifest {
     inputPresentation: string;
     typingSound: string;
     responsiveVariants: string[];
+    supportedThemes: string[];
+    visualQuality: {
+      source: "browser-computed-style";
+      mappedStates: "all";
+      viewports: "all-responsive-variants";
+      themes: "all-supported";
+      visibleLabels: "required";
+      contrast: "wcag-2.2-aa";
+    };
     muteSupported: boolean;
     reducedMotionSupported: boolean;
   };
@@ -141,6 +166,8 @@ export interface SiteAgentManifest {
 
 export * from "./presentation.js";
 export * from "./presentation-audio.js";
+export * from "./rendered-quality.js";
+export * from "./artifact-contract.js";
 
 export interface SiteAgentContext {
   authenticated: boolean;

@@ -26,6 +26,9 @@ Every behavior change needs the applicable profile proof:
 - desktop, tablet, and touch-mobile browser coverage when geometry changes;
 - unit coverage for lifecycle or visibility logic;
 - accessible focus behavior and reduced-motion support;
+- computed-style visible-label and contrast evidence for every mapped state,
+  responsive viewport, and supported theme;
+- complete A/V decoding, stable source identity, and isolated artifact output;
 - no runtime dependency unless the benefit cannot be achieved with browser APIs.
 
 Tutorial and Presentation examples should follow the non-normative

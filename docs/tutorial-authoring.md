@@ -20,6 +20,11 @@ Action, and Presentation adapters.
 | Media pipeline | Narration, word alignment, captions, audio mixing, integrity metadata, and final video |
 | Tutorial viewer | Responsive video, written steps, step seeking, viewport choice, captions, mute, and sharing |
 
+The runner also owns a complete rendered-quality matrix. At every mapped state,
+viewport, and supported theme, it checks visible labels and contrast from real
+browser computed styles. Accessibility-tree labels and source CSS are useful
+inputs but are not substitutes for rendered evidence.
+
 The workflow map is deliberately separate from the standard manifest. A
 capability states what can be queried, shown, or changed; a workflow states the
 ordered teaching sequence for one user outcome. Business logic stays in the
@@ -89,6 +94,13 @@ private record IDs, or selectors in a public manifest or model-visible workflow.
 9. **Bake and release.** Publish only the accepted pair into an exact Playground
    artifact, run hosted conformance and role checks, then promote that same
    artifact through the host's normal release path when separately authorized.
+
+For multi-actor workflows, declare actors plus client and Operations contexts in
+the workflow. Record them on one shared monotonic timeline with step barriers;
+do not splice together unrelated one-client recordings. Normalize source
+fingerprints before hashing so generated timestamps cannot invalidate otherwise
+identical artifacts. Acceptance must fully decode video and required audio and
+must bake only into a clean, symlink-free generated-artifact directory.
 
 ## Recommended local narration pipeline
 
@@ -165,10 +177,14 @@ drifting into separate model-authored copies.
   host adapters.
 - Desktop and touch-mobile are separately recorded and reviewed.
 - The exact target is visible and unobstructed at every action.
+- Every mapped state passes computed-style visible-label and contrast checks in
+  every declared viewport and theme.
 - Pointer hotspot, target outline, ripple, scrolling, typing, and sound remain
   synchronized when Presentation is enabled.
 - Written steps work without audio; captions and mute are accessible.
 - No personal data, credentials, selectors, prompts, or record contents enter
   telemetry or public discovery.
 - Artifacts bind source and presentation fingerprints plus file integrity.
+- Source fingerprints ignore generator-only timestamps, media fully decodes
+  through the mapped timeline, and deployment output is isolated.
 - The exact accepted pair passes hosted checks before release.

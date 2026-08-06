@@ -24,7 +24,7 @@ and the battle-tested Site Navigator engine as the Navigation implementation.
 ## Install
 
 ```bash
-npm install github:bt1142msstate/site-agent-standard#v0.11.0
+npm install github:bt1142msstate/site-agent-standard#v0.12.0
 ```
 
 ```js
@@ -72,6 +72,13 @@ inside a PDF, linked document, disclosure, dialog, viewer, or frame carries a
 host-declared semantic path through the outer route and nested resource to the
 exact source target. The runtime verifies every step and rejects results that
 stop at a wrapper, link, viewer shell, or document cover.
+
+Version `0.12.0` adds rendered visual-quality evidence, synchronized
+multi-actor tutorial contexts, stable timestamp-insensitive source
+fingerprints, and complete media/deployment acceptance evidence. Conformance
+now requires computed-browser-style label and contrast checks across every
+mapped state, responsive variant, and supported theme; accessibility names
+alone cannot prove that visible interface text actually renders.
 
 ```json
 {
@@ -189,6 +196,13 @@ narration replaceable, verify privacy-safe artifacts, and release only matching
 accepted pairs. The guide includes an installable
 [Codex skill example](examples/codex-skills/site-agent-tutorial-author/SKILL.md)
 and the exact reusable prompt used to invoke it.
+
+Tutorial conformance now requires a complete rendered-quality evidence matrix
+for every mapped state, responsive viewport, and supported theme. The reference
+checker reads browser computed styles and rendered text geometry, so an
+accessible name cannot hide a missing or transparent visible label. It also
+supports synchronized multi-actor workflows, stable timestamp-independent
+source fingerprints, full A/V decoding, and isolated deployment acceptance.
 
 ## Query, navigate, and act
 

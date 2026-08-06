@@ -22,7 +22,8 @@ database schema, or a required browser or network transport.
   audit, and optional durable-task stages through authoritative host handlers.
 - **Presentation** optionally renders instructional cursor travel, exact target
   framing, click feedback, visible typing, local sound cues, mute, and reduced
-  motion. See [Presentation](presentation.md).
+  motion. See [Presentation](presentation.md) and
+  [tutorial artifact acceptance](artifacts.md).
 
 ## Version and capability lifecycle
 

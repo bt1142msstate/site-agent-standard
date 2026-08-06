@@ -127,6 +127,27 @@ function validateManifestInternal(manifest, options = {}) {
       if (!Array.isArray(presentation.responsiveVariants) || !presentation.responsiveVariants.length) {
         errors.push("presentation.responsiveVariants must not be empty.");
       }
+      if (!Array.isArray(presentation.supportedThemes) || !presentation.supportedThemes.length) {
+        errors.push("presentation.supportedThemes must not be empty.");
+      }
+      const visualQuality = presentation.visualQuality;
+      if (!isObject(visualQuality)) {
+        errors.push("presentation.visualQuality is required.");
+      } else {
+        const requiredVisualQuality = {
+          source: "browser-computed-style",
+          mappedStates: "all",
+          viewports: "all-responsive-variants",
+          themes: "all-supported",
+          visibleLabels: "required",
+          contrast: "wcag-2.2-aa",
+        };
+        for (const [field, expected] of Object.entries(requiredVisualQuality)) {
+          if (visualQuality[field] !== expected) {
+            errors.push(`presentation.visualQuality.${field} must be ${expected}.`);
+          }
+        }
+      }
       if (presentation.muteSupported !== true) errors.push("presentation.muteSupported must be true.");
       if (presentation.reducedMotionSupported !== true) errors.push("presentation.reducedMotionSupported must be true.");
     }
@@ -292,12 +313,53 @@ function validateManifestInternal(manifest, options = {}) {
     if (workflowIds.has(workflow.id)) errors.push(`${path}.id is duplicated.`);
     workflowIds.add(workflow.id);
     if (!Array.isArray(workflow.steps) || !workflow.steps.length) errors.push(`${path}.steps must not be empty.`);
+    const hasMultiActorDeclaration = workflow.actors !== undefined
+      || workflow.contexts !== undefined
+      || workflow.synchronization !== undefined;
+    const actorIds = new Set();
+    const contextIds = new Set();
+    if (hasMultiActorDeclaration) {
+      if (!Array.isArray(workflow.actors) || !workflow.actors.length) errors.push(`${path}.actors must not be empty.`);
+      if (!Array.isArray(workflow.contexts) || !workflow.contexts.length) errors.push(`${path}.contexts must not be empty.`);
+      for (const [actorIndex, actor] of (workflow.actors || []).entries()) {
+        if (!idPattern.test(String(actor.id || ""))) errors.push(`${path}.actors[${actorIndex}].id is invalid.`);
+        if (actorIds.has(actor.id)) errors.push(`${path}.actors[${actorIndex}].id is duplicated.`);
+        actorIds.add(actor.id);
+        if (!String(actor.role || "").trim()) errors.push(`${path}.actors[${actorIndex}].role is required.`);
+      }
+      for (const [contextIndex, context] of (workflow.contexts || []).entries()) {
+        if (!idPattern.test(String(context.id || ""))) errors.push(`${path}.contexts[${contextIndex}].id is invalid.`);
+        if (contextIds.has(context.id)) errors.push(`${path}.contexts[${contextIndex}].id is duplicated.`);
+        contextIds.add(context.id);
+        if (!actorIds.has(context.actorId)) errors.push(`${path}.contexts[${contextIndex}].actorId is unknown.`);
+        if (!new Set(["client", "operations"]).has(context.kind)) errors.push(`${path}.contexts[${contextIndex}].kind is invalid.`);
+      }
+      const synchronization = workflow.synchronization;
+      if (!isObject(synchronization)
+        || synchronization.timeline !== "shared-monotonic"
+        || synchronization.barriers !== "step-boundaries"
+        || synchronization.recording !== "all-contexts") {
+        errors.push(`${path}.synchronization must declare the shared multi-context timeline.`);
+      }
+      const contextKinds = new Set((workflow.contexts || []).map(({ kind }) => kind));
+      if ((workflow.actors || []).length > 1 && (!contextKinds.has("client") || !contextKinds.has("operations"))) {
+        errors.push(`${path} multi-actor workflows require client and operations contexts.`);
+      }
+    }
     const stepIds = new Set();
     for (const [stepIndex, step] of (workflow.steps || []).entries()) {
       if (!idPattern.test(String(step.id || ""))) errors.push(`${path}.steps[${stepIndex}].id is invalid.`);
       if (stepIds.has(step.id)) errors.push(`${path}.steps[${stepIndex}].id is duplicated.`);
       stepIds.add(step.id);
       if (!capabilityIds.has(step.capabilityId)) errors.push(`${path}.steps[${stepIndex}].capabilityId is unknown.`);
+      if (hasMultiActorDeclaration) {
+        if (!actorIds.has(step.actorId)) errors.push(`${path}.steps[${stepIndex}].actorId is unknown.`);
+        if (!contextIds.has(step.contextId)) errors.push(`${path}.steps[${stepIndex}].contextId is unknown.`);
+        const context = (workflow.contexts || []).find(({ id }) => id === step.contextId);
+        if (context && context.actorId !== step.actorId) {
+          errors.push(`${path}.steps[${stepIndex}] actorId does not own contextId ${step.contextId}.`);
+        }
+      }
     }
     for (const [stepIndex, step] of (workflow.steps || []).entries()) {
       for (const dependency of step.dependsOn || []) {

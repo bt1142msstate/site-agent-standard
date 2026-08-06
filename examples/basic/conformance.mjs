@@ -120,6 +120,54 @@ export default function createConformanceTarget(manifest) {
           }
         },
       },
+      visualQuality: {
+        verify: ({ matrix }) => ({
+          source: "browser-computed-style",
+          observations: matrix.map((item) => ({
+            ...item,
+            source: "browser-computed-style",
+            computedStyles: true,
+            labelsChecked: 1,
+            textContrastChecks: 1,
+            violations: [],
+          })),
+        }),
+      },
+      artifactAcceptance: {
+        verify: () => ({
+          timelineDurationMs: 4200,
+          sourceFingerprint: {
+            algorithm: "sha256",
+            normalization: "stable-content-v1",
+            digest: "a".repeat(64),
+          },
+          media: {
+            video: { decodedFullDuration: true, durationMs: 4200 },
+            audio: { required: true, present: true, decodedFullDuration: true, durationMs: 4200 },
+          },
+          integrity: { verified: true },
+          deployment: {
+            isolated: true,
+            cleanBeforeWrite: true,
+            symlinkFree: true,
+            pathClass: "generated-artifact",
+          },
+        }),
+      },
+      multiActor: {
+        verify: ({ workflows }) => ({
+          source: "synchronized-browser-contexts",
+          observations: workflows.flatMap((workflow) => workflow.steps.map((step, index) => ({
+            workflowId: workflow.id,
+            stepId: step.id,
+            actorId: step.actorId,
+            contextId: step.contextId,
+            startedAtMs: index * 1000,
+            completedAtMs: (index * 1000) + 800,
+            barrierVerified: true,
+          }))),
+        }),
+      },
       denial: { method: "query", request: { resourceId: "orders" } },
     },
   };

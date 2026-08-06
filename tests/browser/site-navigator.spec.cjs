@@ -1,5 +1,43 @@
 const { test, expect } = require("@playwright/test");
 
+test("computed-style quality catches vanished visible labels and low contrast", async ({ page }) => {
+  await page.goto("/examples/basic/");
+  await page.setContent(`
+    <style>
+      body { background: #fff; }
+      button { min-width: 140px; min-height: 48px; }
+      .good { color: #fff; background: #10243b; }
+      .vanished { color: transparent; background: #10243b; }
+      .low { color: rgb(119, 119, 119); background: rgb(119, 119, 119); }
+    </style>
+    <button class="good">Save changes</button>
+    <button class="vanished" aria-label="Delete record">Delete record</button>
+    <button class="low">Review request</button>
+  `);
+
+  const evidence = await page.evaluate(async () => {
+    const { auditRenderedLabel, auditRenderedState } = await import("/src/rendered-quality.js");
+    return {
+      good: auditRenderedLabel(document.querySelector(".good"), { expectedLabel: "Save changes" }),
+      vanished: auditRenderedLabel(document.querySelector(".vanished"), { expectedLabel: "Delete record" }),
+      low: auditRenderedLabel(document.querySelector(".low"), { expectedLabel: "Review request" }),
+      state: auditRenderedState({
+        mappedStateId: "orders.review-and-archive:find",
+        viewport: innerWidth <= 600 ? "mobile" : innerWidth <= 900 ? "tablet" : "desktop",
+        theme: "light",
+        controls: [{ element: document.querySelector(".good"), reference: "orders.save" }],
+      }),
+    };
+  });
+
+  expect(evidence.good.violations).toEqual([]);
+  expect(evidence.vanished.violations).toContain("visible-label-missing");
+  expect(evidence.low.violations).toContain("text-contrast-insufficient");
+  expect(evidence.state.source).toBe("browser-computed-style");
+  expect(evidence.state.labelsChecked).toBe(1);
+  expect(evidence.state.textContrastChecks).toBeGreaterThan(0);
+});
+
 test("renders the standard instructional pointer, exact target, and anchored ripple", async ({ page }) => {
   await page.goto("/examples/basic/");
   await page.setContent(`

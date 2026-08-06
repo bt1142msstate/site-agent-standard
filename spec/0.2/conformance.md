@@ -52,6 +52,15 @@ The CLI MUST NOT report full conformance without an executable adapter.
 12. When Presentation is claimed, prove cursor travel before action, exact
     target framing, hotspot/ripple anchoring, visible typing events, mute,
     reduced motion, cleanup, and desktop plus touch-mobile rendering.
+13. For every mapped state, responsive variant, and supported theme, inspect a
+    real browser's computed styles and rendered text geometry. Prove visible
+    labels and WCAG 2.2 AA contrast; accessible names alone do not pass.
+14. When a workflow declares multiple actors, prove synchronized client and
+    Operations contexts on one monotonic timeline with verified step barriers
+    and all declared contexts represented in the recording.
+15. Validate source fingerprints using stable-content normalization, fully
+    decode accepted video and required audio through the mapped timeline, and
+    prove the deployment directory was clean, symlink-free, and isolated.
 
 An exporter that claims compatibility with another protocol MUST validate its
 generated artifact against that protocol's official schema when one exists and

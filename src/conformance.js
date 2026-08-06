@@ -1,4 +1,6 @@
 import { createPublicDiscoveryManifest, getSiteAgentConformance } from "./manifest.js";
+import { validateTutorialArtifactAcceptanceEvidence } from "./artifact-contract.js";
+import { getRenderedQualityMatrix, validateRenderedQualityEvidence } from "./rendered-quality.js";
 
 function sanitizedProof(id, profile, status, startedAt, failureCode = "") {
   return Object.freeze({
@@ -23,6 +25,36 @@ async function runProof(proofs, id, profile, operation) {
 function requireCase(cases, name) {
   if (!cases?.[name]) throw new Error(`conformance-case-required:${name}`);
   return cases[name];
+}
+
+function validateMultiActorEvidence(workflows, evidence = {}) {
+  if (evidence.source !== "synchronized-browser-contexts") {
+    throw new Error("multi-actor-source-not-proven");
+  }
+  const observations = Array.isArray(evidence.observations) ? evidence.observations : [];
+  const observed = new Map(observations.map((item) => [`${item.workflowId}\0${item.stepId}`, item]));
+  for (const workflow of workflows) {
+    const contexts = new Map((workflow.contexts || []).map((context) => [context.id, context]));
+    for (const step of workflow.steps || []) {
+      const observation = observed.get(`${workflow.id}\0${step.id}`);
+      if (!observation) throw new Error(`multi-actor-step-not-proven:${workflow.id}:${step.id}`);
+      if (observation.actorId !== step.actorId || observation.contextId !== step.contextId) {
+        throw new Error(`multi-actor-step-context-mismatch:${workflow.id}:${step.id}`);
+      }
+      if (!Number.isFinite(Number(observation.startedAtMs)) || !Number.isFinite(Number(observation.completedAtMs))) {
+        throw new Error(`multi-actor-shared-timeline-missing:${workflow.id}:${step.id}`);
+      }
+      if (Number(observation.completedAtMs) < Number(observation.startedAtMs)) {
+        throw new Error(`multi-actor-timeline-invalid:${workflow.id}:${step.id}`);
+      }
+      if (observation.barrierVerified !== true) {
+        throw new Error(`multi-actor-barrier-not-proven:${workflow.id}:${step.id}`);
+      }
+      if (!contexts.has(observation.contextId)) {
+        throw new Error(`multi-actor-context-not-declared:${workflow.id}:${step.id}`);
+      }
+    }
+  }
 }
 
 export async function runSiteAgentConformance(options = {}) {
@@ -176,6 +208,31 @@ export async function runSiteAgentConformance(options = {}) {
       await agent.presentation.type(testCase.inputTarget, testCase.value, { reducedMotion: true });
       await agent.presentation.clear();
       if (typeof testCase.verify === "function") await testCase.verify();
+    });
+
+    await runProof(proofs, "presentation.rendered-visual-quality", "presentation", async () => {
+      const testCase = requireCase(cases, "visualQuality");
+      if (typeof testCase.verify !== "function") throw new Error("rendered-quality-verifier-required");
+      const evidence = await testCase.verify({ matrix: getRenderedQualityMatrix(options.manifest) });
+      const result = validateRenderedQualityEvidence(options.manifest, evidence);
+      if (!result.valid) throw new Error(result.errors.join(" | "));
+    });
+
+    await runProof(proofs, "presentation.artifact-acceptance", "presentation", async () => {
+      const testCase = requireCase(cases, "artifactAcceptance");
+      if (typeof testCase.verify !== "function") throw new Error("artifact-acceptance-verifier-required");
+      const result = validateTutorialArtifactAcceptanceEvidence(await testCase.verify());
+      if (!result.valid) throw new Error(result.errors.join(" | "));
+    });
+  }
+
+  const multiActorWorkflows = (options.manifest.workflows || [])
+    .filter((workflow) => (workflow.actors || []).length > 1);
+  if (multiActorWorkflows.length) {
+    await runProof(proofs, "workflow.synchronized-multi-actor", "core", async () => {
+      const testCase = requireCase(cases, "multiActor");
+      if (typeof testCase.verify !== "function") throw new Error("multi-actor-verifier-required");
+      validateMultiActorEvidence(multiActorWorkflows, await testCase.verify({ workflows: multiActorWorkflows }));
     });
   }
 

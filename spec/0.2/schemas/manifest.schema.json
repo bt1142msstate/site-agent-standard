@@ -22,7 +22,7 @@
     "actions": { "type": "array", "items": { "$ref": "action.schema.json#/$defs/action" } },
     "presentation": {
       "type": "object",
-      "required": ["preset", "cursor", "cursorMotion", "frameTarget", "clickFeedback", "clickSound", "scrollMotion", "inputPresentation", "typingSound", "responsiveVariants", "muteSupported", "reducedMotionSupported"],
+      "required": ["preset", "cursor", "cursorMotion", "frameTarget", "clickFeedback", "clickSound", "scrollMotion", "inputPresentation", "typingSound", "responsiveVariants", "supportedThemes", "visualQuality", "muteSupported", "reducedMotionSupported"],
       "properties": {
         "preset": { "type": "string", "minLength": 1 },
         "cursor": { "type": "string", "minLength": 1 },
@@ -34,6 +34,25 @@
         "inputPresentation": { "type": "string", "minLength": 1 },
         "typingSound": { "type": "string", "minLength": 1 },
         "responsiveVariants": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "enum": ["desktop", "tablet", "mobile"] } },
+        "supportedThemes": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "type": "string", "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$" }
+        },
+        "visualQuality": {
+          "type": "object",
+          "required": ["source", "mappedStates", "viewports", "themes", "visibleLabels", "contrast"],
+          "properties": {
+            "source": { "const": "browser-computed-style" },
+            "mappedStates": { "const": "all" },
+            "viewports": { "const": "all-responsive-variants" },
+            "themes": { "const": "all-supported" },
+            "visibleLabels": { "const": "required" },
+            "contrast": { "const": "wcag-2.2-aa" }
+          },
+          "additionalProperties": false
+        },
         "muteSupported": { "const": true },
         "reducedMotionSupported": { "const": true }
       },
@@ -75,6 +94,43 @@
           "status": { "enum": ["active", "deprecated", "sunset"] },
           "replacedBy": { "type": "string" },
           "sunsetAt": { "type": "string", "format": "date-time" },
+          "actors": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "required": ["id", "role"],
+              "properties": {
+                "id": { "type": "string", "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$" },
+                "role": { "type": "string", "minLength": 1 }
+              },
+              "additionalProperties": false
+            }
+          },
+          "contexts": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "required": ["id", "actorId", "kind"],
+              "properties": {
+                "id": { "type": "string", "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$" },
+                "actorId": { "type": "string" },
+                "kind": { "enum": ["client", "operations"] }
+              },
+              "additionalProperties": false
+            }
+          },
+          "synchronization": {
+            "type": "object",
+            "required": ["timeline", "barriers", "recording"],
+            "properties": {
+              "timeline": { "const": "shared-monotonic" },
+              "barriers": { "const": "step-boundaries" },
+              "recording": { "const": "all-contexts" }
+            },
+            "additionalProperties": false
+          },
           "steps": {
             "type": "array",
             "minItems": 1,
@@ -84,6 +140,8 @@
               "properties": {
                 "id": { "type": "string" },
                 "capabilityId": { "type": "string" },
+                "actorId": { "type": "string" },
+                "contextId": { "type": "string" },
                 "dependsOn": { "type": "array", "items": { "type": "string" } },
                 "onSuccess": { "type": "string" },
                 "onFailure": { "type": "string" }
@@ -92,6 +150,18 @@
             }
           }
         },
+        "allOf": [
+          {
+            "if": {
+              "anyOf": [
+                { "properties": { "actors": {} }, "required": ["actors"] },
+                { "properties": { "contexts": {} }, "required": ["contexts"] },
+                { "properties": { "synchronization": {} }, "required": ["synchronization"] }
+              ]
+            },
+            "then": { "required": ["actors", "contexts", "synchronization"] }
+          }
+        ],
         "patternProperties": { "^x-[a-z0-9._-]+$": true },
         "additionalProperties": false
       }

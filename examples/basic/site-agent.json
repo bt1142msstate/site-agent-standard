@@ -17,6 +17,15 @@
     "inputPresentation": "visible-typing-with-keystroke-audio",
     "typingSound": "ios-inspired-mobile-keyboard-tap-v1",
     "responsiveVariants": ["desktop", "mobile"],
+    "supportedThemes": ["light"],
+    "visualQuality": {
+      "source": "browser-computed-style",
+      "mappedStates": "all",
+      "viewports": "all-responsive-variants",
+      "themes": "all-supported",
+      "visibleLabels": "required",
+      "contrast": "wcag-2.2-aa"
+    },
     "muteSupported": true,
     "reducedMotionSupported": true
   },
@@ -139,10 +148,23 @@
       "description": "Review an order and archive it after explicit confirmation",
       "visibility": "authenticated",
       "permissionsAll": ["orders.manage"],
+      "actors": [
+        { "id": "requester", "role": "manager" },
+        { "id": "operator", "role": "operations" }
+      ],
+      "contexts": [
+        { "id": "client", "actorId": "requester", "kind": "client" },
+        { "id": "operations", "actorId": "operator", "kind": "operations" }
+      ],
+      "synchronization": {
+        "timeline": "shared-monotonic",
+        "barriers": "step-boundaries",
+        "recording": "all-contexts"
+      },
       "steps": [
-        { "id": "find", "capabilityId": "orders" },
-        { "id": "show", "capabilityId": "orders.detail", "dependsOn": ["find"] },
-        { "id": "archive", "capabilityId": "orders.archive", "dependsOn": ["show"] }
+        { "id": "find", "capabilityId": "orders", "actorId": "requester", "contextId": "client" },
+        { "id": "show", "capabilityId": "orders.detail", "actorId": "requester", "contextId": "client", "dependsOn": ["find"] },
+        { "id": "archive", "capabilityId": "orders.archive", "actorId": "operator", "contextId": "operations", "dependsOn": ["show"] }
       ]
     }
   ],
