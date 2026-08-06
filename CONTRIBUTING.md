@@ -28,5 +28,9 @@ Every behavior change needs the applicable profile proof:
 - accessible focus behavior and reduced-motion support;
 - no runtime dependency unless the benefit cannot be achieved with browser APIs.
 
+Tutorial and Presentation examples should follow the non-normative
+[tutorial-authoring guide](docs/tutorial-authoring.md), including independent
+desktop and touch-mobile proof and privacy-safe artifacts.
+
 Pull requests should explain the problem, the root cause, the tradeoff, and the
 proof used to verify the fix. Keep unrelated refactors separate.

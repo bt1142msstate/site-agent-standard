@@ -40,3 +40,7 @@ desktop and touch-mobile viewports, including nested scrolling, sticky headers,
 delayed targets, reduced motion, mute, target replacement, and cleanup. A
 tutorial is conformant only when its workflow capabilities also conform to the
 profiles they invoke.
+
+The non-normative [tutorial-authoring guide](../../docs/tutorial-authoring.md)
+describes a complete host workflow, recording, narration, artifact, Codex skill,
+and release pattern built on this profile.

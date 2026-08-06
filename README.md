@@ -24,7 +24,7 @@ and the battle-tested Site Navigator engine as the Navigation implementation.
 ## Install
 
 ```bash
-npm install github:bt1142msstate/site-agent-standard#v0.6.0
+npm install github:bt1142msstate/site-agent-standard#v0.11.0
 ```
 
 ```js
@@ -180,6 +180,15 @@ mixPresentationSoundSamples(track, frame, "click", {
   sampleRate: SITE_AGENT_PRESENTATION_SAMPLE_RATE,
 });
 ```
+
+## Generate tutorials
+
+Use the [tutorial-authoring guide](docs/tutorial-authoring.md) to build a host
+workflow layer, record independent desktop and touch-mobile variants, keep
+narration replaceable, verify privacy-safe artifacts, and release only matching
+accepted pairs. The guide includes an installable
+[Codex skill example](examples/codex-skills/site-agent-tutorial-author/SKILL.md)
+and the exact reusable prompt used to invoke it.
 
 ## Query, navigate, and act
 

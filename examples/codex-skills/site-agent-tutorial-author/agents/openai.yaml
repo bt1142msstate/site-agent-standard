@@ -1,0 +1,4 @@
+interface:
+  display_name: "Site Agent Tutorial Author"
+  short_description: "Record and verify Site Agent tutorials"
+  default_prompt: "Use $site-agent-tutorial-author to record and verify desktop and mobile tutorials for the affected Site Agent workflows."
