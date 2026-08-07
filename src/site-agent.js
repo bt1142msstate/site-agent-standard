@@ -95,6 +95,24 @@ function safeTelemetry(report, event) {
   }));
 }
 
+const taskStatuses = new Set(["working", "input_required", "completed", "failed", "cancelled"]);
+
+function normalizeActionTask(task, action) {
+  if (!task || typeof task.taskId !== "string" || !task.taskId.trim()) throw new Error("invalid-action-task");
+  const status = task.status === "canceled" ? "cancelled" : task.status;
+  if (!taskStatuses.has(status)) throw new Error("invalid-action-task");
+  if (status === "input_required") {
+    if (!task.inputRequests || typeof task.inputRequests !== "object" || Array.isArray(task.inputRequests)) {
+      throw new Error("invalid-action-task-input-requests");
+    }
+  }
+  const output = task.output ?? task.result;
+  if (status === "completed" && action.outputSchema) {
+    assertSchemaValue(action.outputSchema, output || {}, "action-output");
+  }
+  return Object.freeze({ ...task, status, ...(output === undefined ? {} : { output }) });
+}
+
 export function createSiteAgent(options = {}) {
   const manifest = assertSiteAgentManifest(options.manifest);
   const adapters = options.adapters || {};
@@ -317,8 +335,10 @@ export function createSiteAgent(options = {}) {
         const result = await adapter({ action, context, execution, request });
         const acceptedStatuses = new Set(["confirmed", "already-applied", "reconfirmation-required", "working"]);
         if (!result || !acceptedStatuses.has(result.status)) throw new Error("action-confirmation-failed");
+        let normalizedResult = result;
         if (result.status === "working") {
           if (action.taskSupport === "forbidden" || !result.task?.taskId) throw new Error("action-task-not-supported");
+          normalizedResult = { ...result, task: normalizeActionTask(result.task, action) };
           consumedPlans.add(request.planId);
         }
         if (result.status === "reconfirmation-required") {
@@ -338,7 +358,7 @@ export function createSiteAgent(options = {}) {
           assertSchemaValue(action.outputSchema, result.output || {}, "action-output");
         }
         return {
-          ...result,
+          ...normalizedResult,
           destination: validateSemanticDestination(result.destination, currentManifest),
           replacementPlan: result.replacementPlan
             ? { ...result.replacementPlan, destination: validateSemanticDestination(result.replacementPlan.destination, currentManifest) }
@@ -373,11 +393,24 @@ export function createSiteAgent(options = {}) {
         const getTask = requiredAdapter(adapters.action?.getTask, "action-task-get");
         execution.assertActive();
         const task = await getTask({ action, context, execution, request });
-        if (!task?.taskId || !new Set(["working", "completed", "failed", "canceled"]).has(task.status)) {
-          throw new Error("invalid-action-task");
+        return normalizeActionTask(task, action);
+      });
+    },
+    async updateTask(request = {}) {
+      return invoke("action", request.actionId, request, async (execution) => {
+        const currentManifest = await getManifest();
+        const context = await getContext();
+        const action = findCapability(currentManifest.actions, request.actionId, "action");
+        assertAuthorized(action, context);
+        if (action.taskSupport === "forbidden") throw new Error("action-task-not-supported");
+        if (!request.inputResponses || typeof request.inputResponses !== "object" || Array.isArray(request.inputResponses)) {
+          throw new Error("action-task-input-responses-required");
         }
-        if (task.status === "completed" && action.outputSchema) assertSchemaValue(action.outputSchema, task.output || {}, "action-output");
-        return task;
+        const updateTask = requiredAdapter(adapters.action?.updateTask, "action-task-update");
+        execution.assertActive();
+        const result = await updateTask({ action, context, execution, request });
+        if (!result || result.acknowledged !== true) throw new Error("action-task-update-failed");
+        return Object.freeze({ acknowledged: true });
       });
     },
     async cancelTask(request = {}) {
@@ -389,9 +422,12 @@ export function createSiteAgent(options = {}) {
         if (action.taskSupport === "forbidden") throw new Error("action-task-not-supported");
         const cancelTask = requiredAdapter(adapters.action?.cancelTask, "action-task-cancel");
         execution.assertActive();
-        const task = await cancelTask({ action, context, execution, request });
-        if (!task?.taskId || task.status !== "canceled") throw new Error("action-task-cancel-failed");
-        return task;
+        const result = await cancelTask({ action, context, execution, request });
+        if (result?.acknowledged === true) return Object.freeze({ acknowledged: true });
+        if (result?.taskId) {
+          return Object.freeze({ acknowledged: true, task: normalizeActionTask(result, action) });
+        }
+        throw new Error("action-task-cancel-failed");
       });
     },
   });

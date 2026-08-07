@@ -24,7 +24,7 @@ and the battle-tested Site Navigator engine as the Navigation implementation.
 ## Install
 
 ```bash
-npm install github:bt1142msstate/site-agent-standard#v0.13.0
+npm install github:bt1142msstate/site-agent-standard#v0.14.0
 ```
 
 ```js
@@ -84,6 +84,13 @@ Version `0.13.0` adds permission-filtered capability snapshots with explicit
 revisions, transport-neutral structured problems, abort/deadline propagation,
 and executable host-inventory evidence for complete coverage claims. A complete
 manifest can no longer prove its own completeness merely by counting itself.
+
+Version `0.14.0` keeps in-page WebMCP tools synchronized with the active
+permission-filtered capability revision and aligns durable task behavior with
+the current MCP Tasks extension: server-directed creation, `input_required`
+updates, cooperative cancellation, caller-scoped handles, and no task listing.
+The browser and MCP binding guidance now states the transport security and
+negotiation boundaries explicitly.
 
 ```json
 {

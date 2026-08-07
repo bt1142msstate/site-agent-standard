@@ -102,9 +102,16 @@ outcomes complete idempotently. Declared non-conflicting changes may be rebased.
 A meaningful conflict produces a replacement preview or rejection. Timestamp
 drift alone is not a semantic conflict.
 
-Long-running Actions declare `taskSupport`. Durable task IDs are opaque and
-actor scoped. Task status, progress, cancellation, and result retrieval do not
-weaken authorization, idempotency, output validation, or audit requirements.
+Long-running Actions declare `taskSupport`. Durable task creation is
+server-directed: a client advertises support, but the host decides per request
+whether work becomes a task. Durable task IDs are opaque, high entropy, actor
+scoped, and not listable. Task states are `working`, `input_required`,
+`completed`, `failed`, and `cancelled`. Input responses use unique request keys
+that are never reused during a task lifetime. Completed results validate against
+the original Action output schema. Cancellation is cooperative acknowledgement,
+not proof that work stopped or rolled back. Task polling, input updates,
+cancellation, and result retrieval reauthorize the caller and do not weaken
+idempotency, output validation, audit, TTL, or rate-limit requirements.
 
 ## Cancellation, deadlines, and problems
 
@@ -142,6 +149,9 @@ projected into:
 
 Bindings MUST NOT expose host selectors, database paths, credentials, or permit
 a transport to bypass Action confirmation and authoritative handlers.
+Bindings negotiate their own versions and extensions independently from
+`standardVersion`. See the current [browser/WebMCP](bindings/browser.md) and
+[MCP](bindings/mcp.md) guidance.
 
 ## Exact target selection
 

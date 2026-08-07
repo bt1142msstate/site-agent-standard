@@ -252,11 +252,15 @@ export interface ActionConfirmationResult {
 
 export interface ActionTask {
   taskId: string;
-  status: "working" | "completed" | "failed" | "canceled";
+  status: "working" | "input_required" | "completed" | "failed" | "cancelled";
   statusMessage?: string;
   createdAt?: string;
   lastUpdatedAt?: string;
+  ttlMs?: number | null;
+  pollIntervalMs?: number;
+  inputRequests?: Record<string, unknown>;
   output?: unknown;
+  error?: unknown;
 }
 
 export interface SiteAgentOptions {
@@ -276,6 +280,7 @@ export interface SiteAgentOptions {
       confirm(input: unknown): unknown | Promise<unknown>;
       cancel(input: unknown): unknown | Promise<unknown>;
       getTask?(input: unknown): unknown | Promise<unknown>;
+      updateTask?(input: unknown): unknown | Promise<unknown>;
       cancelTask?(input: unknown): unknown | Promise<unknown>;
     };
     presentation?: {
@@ -320,7 +325,8 @@ export declare function createSiteAgent(options: SiteAgentOptions): {
   confirmAction(request: { actionId: string; planId: string; confirmation?: unknown } & import("./execution.js").SiteAgentExecutionRequest): Promise<unknown>;
   cancelAction(request: { actionId: string; planId: string } & import("./execution.js").SiteAgentExecutionRequest): Promise<unknown>;
   getTask(request: { actionId: string; taskId: string } & import("./execution.js").SiteAgentExecutionRequest): Promise<ActionTask>;
-  cancelTask(request: { actionId: string; taskId: string } & import("./execution.js").SiteAgentExecutionRequest): Promise<ActionTask>;
+  updateTask(request: { actionId: string; taskId: string; inputResponses: Record<string, unknown> } & import("./execution.js").SiteAgentExecutionRequest): Promise<{ acknowledged: true }>;
+  cancelTask(request: { actionId: string; taskId: string } & import("./execution.js").SiteAgentExecutionRequest): Promise<{ acknowledged: true; task?: ActionTask }>;
 };
 
 export * from "./site-navigator.js";

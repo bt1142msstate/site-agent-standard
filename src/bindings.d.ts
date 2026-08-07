@@ -1,14 +1,18 @@
 import type { SiteAgentManifest, SiteAgentContext } from "./site-agent.js";
 
 export declare function createMcpBinding(manifest: SiteAgentManifest, context?: SiteAgentContext): {
+  capabilities: { extensions: Record<string, Record<string, never>> };
+  taskContracts: unknown[];
   resourceTemplates: unknown[];
   tools: unknown[];
 };
+export declare const MCP_TASKS_EXTENSION_ID: "io.modelcontextprotocol/tasks";
 export declare function registerWebMcpTools(options: {
-  document: Document & { modelContext?: unknown };
+  document?: Document & { modelContext?: unknown };
+  modelContext?: unknown;
   agent: unknown;
   exposedTo?: string[];
-}): Promise<{ unregister(): void }>;
+}): Promise<{ readonly registeredToolNames: readonly string[]; unregister(): void }>;
 export declare function createArazzoBinding(manifest: SiteAgentManifest, options: {
   sourceDescriptions: Array<{ name: string; type: "openapi" | "asyncapi" | "arazzo"; url: string }>;
   operationIds: Record<string, string>;

@@ -43,6 +43,10 @@
     MUST be audience bound and MUST NOT be passed through to another service.
 14. Durable tasks and subscriptions MUST support cleanup, bounded retention,
     current authorization, terminal-state stability, and denial-safe reconnect.
+    Task handles MUST be high entropy, actor scoped, and non-listable. Input
+    requests retain the same trust and consent requirements as their equivalent
+    direct request. Cancellation is cooperative and MUST NOT be represented as
+    rollback or completion until the observable task reaches that state.
 15. Telemetry MUST exclude prompts, record contents, opaque references, personal
     data, credentials, and secrets. Capability IDs, status, duration, standard
     version, and sanitized failure classes are permitted.

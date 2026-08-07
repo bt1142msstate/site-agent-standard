@@ -274,10 +274,13 @@ test("0.2 validates action input/output and supports durable task adapters", asy
     adapters: {
       action: {
         prepare: async () => ({ planId: "plan-task", status: "prepared", confirmation: "explicit", expiresAt: "2099-01-01T00:00:00.000Z" }),
-        confirm: async () => ({ status: "working", task: { taskId: "task-1", status: "working" } }),
+        confirm: async () => ({ status: "working", task: { taskId: "task-1", status: "working", ttlMs: 60000 } }),
         cancel: async () => ({ status: "canceled" }),
-        getTask: async () => ({ taskId: "task-1", status: "completed", output: { archived: true } }),
-        cancelTask: async () => ({ taskId: "task-2", status: "canceled" }),
+        getTask: async ({ request }) => request.taskId === "task-input"
+          ? { taskId: request.taskId, status: "input_required", inputRequests: { reason: { type: "elicitation" } } }
+          : { taskId: request.taskId, status: "completed", result: { archived: true } },
+        updateTask: async () => ({ acknowledged: true }),
+        cancelTask: async () => ({ acknowledged: true }),
       },
     },
   });
@@ -285,7 +288,12 @@ test("0.2 validates action input/output and supports durable task adapters", asy
   const plan = await agent.prepareAction({ actionId: "orders.archive", input: { orderReference: "opaque-order-1" } });
   assert.equal((await agent.confirmAction({ actionId: "orders.archive", planId: plan.planId, confirmation: true })).status, "working");
   assert.equal((await agent.getTask({ actionId: "orders.archive", taskId: "task-1" })).status, "completed");
-  assert.equal((await agent.cancelTask({ actionId: "orders.archive", taskId: "task-2" })).status, "canceled");
+  assert.equal((await agent.getTask({ actionId: "orders.archive", taskId: "task-input" })).status, "input_required");
+  assert.deepEqual(
+    await agent.updateTask({ actionId: "orders.archive", taskId: "task-input", inputResponses: { reason: "approved" } }),
+    { acknowledged: true },
+  );
+  assert.deepEqual(await agent.cancelTask({ actionId: "orders.archive", taskId: "task-2" }), { acknowledged: true });
 });
 
 test("transport bindings preserve semantic IDs without exposing implementation selectors", async () => {
@@ -295,6 +303,7 @@ test("transport bindings preserve semantic IDs without exposing implementation s
   assert.equal(mcp.resourceTemplates[0].name, "orders");
   assert.ok(mcp.tools.some(({ name }) => name === "query.orders"));
   assert.ok(mcp.tools.some(({ name }) => name === "prepare.orders.archive"));
+  assert.deepEqual(mcp.capabilities.extensions, {});
   assert.equal(JSON.stringify(mcp).includes("selector"), false);
   const arazzo = createArazzoBinding(manifest, {
     sourceDescriptions: [{ name: "siteAgentApi", type: "openapi", url: "/openapi.json" }],
@@ -318,6 +327,54 @@ test("transport bindings preserve semantic IDs without exposing implementation s
   assert.equal(registered.length, 2);
   assert.equal((await registered.find(({ name }) => name === "query.orders").execute({ filters: { status: "open" } })).total, 1);
   handle.unregister();
+});
+
+test("WebMCP registrations follow active capability revisions and clean up stale tools", async () => {
+  const current = example();
+  let notify;
+  const agent = createSiteAgent({
+    manifest: current,
+    getManifest: () => current,
+    subscribeCapabilities: (listener) => {
+      notify = listener;
+      return () => {};
+    },
+    context: { authenticated: true, permissions: ["orders.view", "orders.manage"] },
+    adapters: {
+      query: async () => ({ items: [], total: 0 }),
+      action: { prepare: async () => ({}) },
+    },
+  });
+  const registrations = [];
+  const handle = await registerWebMcpTools({
+    document: {
+      modelContext: {
+        registerTool: async (definition, registration) => registrations.push({ definition, registration }),
+      },
+    },
+    agent,
+  });
+  assert.deepEqual(handle.registeredToolNames, ["prepare.orders.archive", "query.orders"]);
+
+  current.capabilityRevision = "example-orders-2";
+  current.queryResources[0].status = "sunset";
+  await notify();
+  assert.deepEqual(handle.registeredToolNames, ["prepare.orders.archive"]);
+  assert.equal(registrations.find(({ definition }) => definition.name === "query.orders").registration.signal.aborted, true);
+
+  handle.unregister();
+  assert.equal(registrations.at(-1).registration.signal.aborted, true);
+});
+
+test("MCP task projection is extension-negotiated, server-directed, and non-listable", () => {
+  const manifest = example();
+  manifest.actions[0].taskSupport = "optional";
+  const binding = createMcpBinding(manifest, { authenticated: true, permissions: ["orders.manage"] });
+  assert.deepEqual(binding.capabilities.extensions, { "io.modelcontextprotocol/tasks": {} });
+  assert.deepEqual(binding.taskContracts[0].methods, ["tasks/get", "tasks/update", "tasks/cancel"]);
+  assert.equal(binding.taskContracts[0].serverDirected, true);
+  assert.equal(binding.taskContracts[0].listing, false);
+  assert.equal(Object.hasOwn(binding.tools.find(({ name }) => name === "prepare.orders.archive"), "execution"), false);
 });
 
 test("full conformance requires and records executable host proofs", async () => {

@@ -1,5 +1,7 @@
 import { filterSiteAgentManifest } from "./manifest.js";
 
+export const MCP_TASKS_EXTENSION_ID = "io.modelcontextprotocol/tasks";
+
 function title(capability) {
   return capability.title || capability.id.split(/[._-]/).map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(" ");
 }
@@ -35,7 +37,10 @@ function queryOutputSchema(resource) {
 
 export function createMcpBinding(manifest, context = {}) {
   const filtered = filterSiteAgentManifest(manifest, context, { stripExtensions: true });
-  const queryTools = filtered.queryResources.map((resource) => ({
+  const queryResources = filtered.queryResources.filter(({ status }) => status !== "sunset");
+  const actions = filtered.actions.filter(({ status }) => status !== "sunset");
+  const taskActions = actions.filter((action) => action.taskSupport !== "forbidden");
+  const queryTools = queryResources.map((resource) => ({
     name: `query.${resource.id}`,
     title: title(resource),
     description: resource.description,
@@ -55,14 +60,25 @@ export function createMcpBinding(manifest, context = {}) {
     _meta: { "site-agent/resource-id": resource.id },
   }));
   return Object.freeze({
-    resourceTemplates: filtered.queryResources.map((resource) => ({
+    capabilities: taskActions.length ? {
+      extensions: { [MCP_TASKS_EXTENSION_ID]: {} },
+    } : { extensions: {} },
+    taskContracts: taskActions.map((action) => ({
+      actionId: action.id,
+      support: action.taskSupport,
+      extensionId: MCP_TASKS_EXTENSION_ID,
+      serverDirected: true,
+      methods: ["tasks/get", "tasks/update", "tasks/cancel"],
+      listing: false,
+    })),
+    resourceTemplates: queryResources.map((resource) => ({
       uriTemplate: `site-agent://${manifest.id}/query/${resource.id}{?cursor}`,
       name: resource.id,
       title: title(resource),
       description: resource.description,
       mimeType: "application/json",
     })),
-    tools: [...queryTools, ...filtered.actions.map((action) => ({
+    tools: [...queryTools, ...actions.map((action) => ({
       name: `prepare.${action.id}`,
       title: title(action),
       description: `${action.description} This prepares a reviewable plan and does not bypass confirmation.`,
@@ -81,20 +97,30 @@ export function createMcpBinding(manifest, context = {}) {
         },
       },
       annotations: toolAnnotations(action),
-      execution: { taskSupport: action.taskSupport || "forbidden" },
-      _meta: { "site-agent/action-id": action.id, "site-agent/stage": "prepare" },
+      _meta: {
+        "site-agent/action-id": action.id,
+        "site-agent/stage": "prepare",
+        "site-agent/task-support": action.taskSupport || "forbidden",
+      },
     }))],
   });
 }
 
 export async function registerWebMcpTools(options = {}) {
-  const modelContext = options.document?.modelContext;
+  const modelContext = options.modelContext || options.document?.modelContext;
   if (!modelContext?.registerTool) throw new Error("webmcp-model-context-unavailable");
-  const manifest = await options.agent.getCapabilities();
-  const controllers = [];
-  for (const resource of manifest.queryResources) {
-    const controller = new AbortController();
-    await modelContext.registerTool({
+  if (!options.agent) throw new TypeError("webmcp-agent-required");
+
+  const exposedTo = options.exposedTo || [];
+  const registrations = new Map();
+  let active = true;
+  let subscription = null;
+  let pending = Promise.resolve();
+
+  const describeTools = (manifest) => [
+    ...manifest.queryResources.filter(({ status }) => status !== "sunset").map((resource) => ({
+      key: `query.${resource.id}`,
+      definition: {
       name: `query.${resource.id}`,
       title: title(resource),
       description: resource.description,
@@ -111,12 +137,11 @@ export async function registerWebMcpTools(options = {}) {
       },
       annotations: { readOnlyHint: true, untrustedContentHint: true },
       execute: (request) => options.agent.query({ resourceId: resource.id, ...request }),
-    }, { signal: controller.signal, exposedTo: options.exposedTo || [] });
-    controllers.push(controller);
-  }
-  for (const action of manifest.actions) {
-    const controller = new AbortController();
-    await modelContext.registerTool({
+      },
+    })),
+    ...manifest.actions.filter(({ status }) => status !== "sunset").map((action) => ({
+      key: `prepare.${action.id}`,
+      definition: {
       name: `prepare.${action.id}`,
       title: title(action),
       description: `${action.description} The user reviews the returned plan before it can execute.`,
@@ -126,10 +151,62 @@ export async function registerWebMcpTools(options = {}) {
         untrustedContentHint: Boolean(action.openWorld),
       },
       execute: (input) => options.agent.prepareAction({ actionId: action.id, input }),
-    }, { signal: controller.signal, exposedTo: options.exposedTo || [] });
-    controllers.push(controller);
+      },
+    })),
+  ];
+
+  const synchronize = (manifest) => {
+    pending = pending.then(async () => {
+      if (!active) return;
+      const desired = new Map(describeTools(manifest).map((entry) => [entry.key, entry]));
+
+      for (const [key, registration] of registrations) {
+        const next = desired.get(key);
+        const nextFingerprint = next ? JSON.stringify({ ...next.definition, execute: undefined }) : "";
+        if (!next || nextFingerprint !== registration.fingerprint) {
+          registration.controller.abort();
+          registrations.delete(key);
+        }
+      }
+
+      for (const [key, entry] of desired) {
+        if (registrations.has(key)) continue;
+        const controller = new AbortController();
+        await modelContext.registerTool(entry.definition, { signal: controller.signal, exposedTo });
+        registrations.set(key, {
+          controller,
+          fingerprint: JSON.stringify({ ...entry.definition, execute: undefined }),
+        });
+      }
+    });
+    return pending;
+  };
+
+  const initial = typeof options.agent.getCapabilitySnapshot === "function"
+    ? (await options.agent.getCapabilitySnapshot()).manifest
+    : await options.agent.getCapabilities();
+  await synchronize(initial);
+
+  if (typeof options.agent.subscribeCapabilitySnapshots === "function") {
+    try {
+      subscription = await options.agent.subscribeCapabilitySnapshots(({ manifest }) => synchronize(manifest));
+      await pending;
+    } catch (error) {
+      if (!String(error?.message || error).includes("capability-subscription-not-supported")) throw error;
+    }
   }
-  return Object.freeze({ unregister: () => controllers.forEach((controller) => controller.abort()) });
+
+  return Object.freeze({
+    get registeredToolNames() {
+      return Object.freeze([...registrations.keys()].sort());
+    },
+    unregister() {
+      active = false;
+      subscription?.unsubscribe?.();
+      for (const registration of registrations.values()) registration.controller.abort();
+      registrations.clear();
+    },
+  });
 }
 
 export function createArazzoBinding(manifest, options = {}) {
