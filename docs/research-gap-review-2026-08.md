@@ -1,0 +1,56 @@
+# Standards gap review - August 2026
+
+This review compares Site Agent Standard 0.2 with adjacent primary standards.
+It is informative; `spec/0.2/` remains normative.
+
+## Adopted in package v0.13.0
+
+- **Active capability lifecycle.** WebMCP exposes tools from the active page and
+  supports dynamic registration and unregistration. Site Agent now exposes
+  permission-filtered, revisioned capability snapshots and subscriptions while
+  still reauthorizing every call.
+- **Cancellation and bounded execution.** MCP tasks define cancellation, TTL,
+  requester isolation, and bounded resources. Site Agent now propagates abort
+  signals and deadlines into adapters and standardizes partial-effect reporting.
+- **Structured failures.** RFC 9457 demonstrates a transport-neutral problem
+  shape. Site Agent now uses a domain-specific safe problem contract with stable
+  codes, remediation, retryability, and partial effects.
+- **Evidence-backed completeness.** Coverage declarations now require an
+  executable independent host inventory with stable digest, reviewed hashed
+  exemptions, and zero unresolved entries for complete claims.
+
+## Already aligned
+
+- JSON Schema 2020-12 validates filter, state, input, confirmation, output, and
+  event boundaries.
+- WebDriver BiDi remains an optional browser-control transport beneath semantic
+  Navigation; the Site Agent contract does not expose selectors.
+- Arazzo 1.1 source descriptions, workflow dependencies, and failure/success
+  structure are supported as projections rather than duplicated as host logic.
+- W3C Trace Context can carry a transport correlation context, while Site Agent
+  telemetry remains content-free and transport neutral.
+
+## Deliberately deferred
+
+- **Generic multi-operation orchestration and compensation.** The standard can
+  declare workflows, but it does not yet become a second workflow engine. A
+  future draft should project Arazzo-compatible dependencies, retry limits, and
+  compensation semantics instead of inventing incompatible primitives.
+- **Cross-origin frames, closed shadow roots, and canvas-only interfaces.** A
+  host must expose semantic adapters for these boundaries. Inference or a DOM
+  fallback would weaken exactness and browser security.
+- **Formal registry discovery.** `/site-agent.json` remains the advertised
+  discovery location until the draft is stable enough to pursue a registered
+  well-known identifier.
+
+## Primary sources
+
+- [WebMCP overview](https://developer.chrome.com/docs/ai/webmcp)
+- [WebMCP proposal](https://github.com/webmachinelearning/webmcp)
+- [MCP 2025-11-25 changelog](https://modelcontextprotocol.io/specification/2025-11-25/changelog)
+- [MCP tasks](https://modelcontextprotocol.io/specification/2025-11-25/basic/utilities/tasks)
+- [Arazzo 1.1.0](https://spec.openapis.org/arazzo/latest.html)
+- [WebDriver BiDi](https://www.w3.org/TR/webdriver-bidi/)
+- [RFC 9457 Problem Details](https://www.rfc-editor.org/rfc/rfc9457.html)
+- [W3C Trace Context](https://www.w3.org/TR/trace-context/)
+- [JSON Schema 2020-12](https://json-schema.org/draft/2020-12)

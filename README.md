@@ -24,7 +24,7 @@ and the battle-tested Site Navigator engine as the Navigation implementation.
 ## Install
 
 ```bash
-npm install github:bt1142msstate/site-agent-standard#v0.12.0
+npm install github:bt1142msstate/site-agent-standard#v0.13.0
 ```
 
 ```js
@@ -80,6 +80,11 @@ now requires computed-browser-style label and contrast checks across every
 mapped state, responsive variant, and supported theme; accessibility names
 alone cannot prove that visible interface text actually renders.
 
+Version `0.13.0` adds permission-filtered capability snapshots with explicit
+revisions, transport-neutral structured problems, abort/deadline propagation,
+and executable host-inventory evidence for complete coverage claims. A complete
+manifest can no longer prove its own completeness merely by counting itself.
+
 ```json
 {
   "materialization": {
@@ -111,7 +116,7 @@ extensions. A signed-in application may provide a permission-filtered manifest
 through its host adapter.
 
 See [the complete example](examples/basic/site-agent.json) and the
-[normative draft](spec/0.1/README.md).
+[normative draft](spec/0.2/README.md).
 
 ## Create an agent runtime
 
@@ -139,6 +144,21 @@ const agent = createSiteAgent({
 The standard does not give the model a database path, CSS selector, arbitrary
 URL, or mutation envelope. Sites resolve semantic capability IDs and opaque
 references inside their own authorization boundary.
+
+Capability catalogs are revisioned runtime snapshots, not startup constants:
+
+```js
+const snapshot = await agent.getCapabilitySnapshot();
+const subscription = await agent.subscribeCapabilitySnapshots((next) => {
+  console.log(next.capabilityRevision);
+});
+```
+
+Every operation accepts an `AbortSignal`, deadline, and privacy-safe correlation
+ID. Host adapters receive the corresponding execution context and MUST observe
+it before crossing an irreversible boundary. Failures are `SiteAgentProblem`
+instances with stable categories, retry guidance, and explicit partial-effect
+state instead of transport-specific error strings.
 
 ## Instructional presentation
 
@@ -274,8 +294,9 @@ npm run check
 ```
 
 `validate` checks structure. `test` only reports full conformance after the host
-adapter executes Query, Navigation, Action, denial, reconciliation, and lifecycle
-proofs. A manifest's coverage declaration is not accepted as test evidence.
+adapter executes Query, Navigation, Action, denial, reconciliation, lifecycle,
+cancellation, and independent inventory proofs. A manifest's coverage
+declaration is not accepted as test evidence.
 
 The browser suite runs deliberately difficult synthetic layouts at desktop,
 tablet-touch, and mobile-touch sizes. A conforming host should additionally
@@ -314,7 +335,7 @@ refuses to invent operations that are absent from the source API description.
 ## Contributing and security
 
 See [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md), and
-[the 0.1 security requirements](spec/0.1/security.md). New behavior requires a
+[the 0.2 security requirements](spec/0.2/security.md). New behavior requires a
 minimal synthetic reproduction and profile-appropriate conformance proof.
 
 ## License

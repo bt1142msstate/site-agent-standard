@@ -1,6 +1,7 @@
 import { createPublicDiscoveryManifest, getSiteAgentConformance } from "./manifest.js";
 import { validateTutorialArtifactAcceptanceEvidence } from "./artifact-contract.js";
 import { getRenderedQualityMatrix, validateRenderedQualityEvidence } from "./rendered-quality.js";
+import { validateCoverageEvidence } from "./coverage.js";
 
 function sanitizedProof(id, profile, status, startedAt, failureCode = "") {
   return Object.freeze({
@@ -88,6 +89,35 @@ export async function runSiteAgentConformance(options = {}) {
     if (/selector|firestorePath|storagePath|documentPath|collectionPath|credential/i.test(serialized)) {
       throw new Error("private-implementation-detail-exposed");
     }
+  });
+
+  await runProof(proofs, "core.revisioned-capability-snapshot", "core", async () => {
+    const snapshot = await agent.getCapabilitySnapshot();
+    if (snapshot.standardVersion !== options.manifest.standardVersion) throw new Error("capability-snapshot-standard-version-mismatch");
+    if (snapshot.manifestVersion !== options.manifest.manifestVersion) throw new Error("capability-snapshot-manifest-version-mismatch");
+    if (snapshot.capabilityRevision !== options.manifest.capabilityRevision) throw new Error("capability-snapshot-revision-mismatch");
+    if (snapshot.manifest.capabilityRevision !== snapshot.capabilityRevision) throw new Error("capability-snapshot-manifest-mismatch");
+  });
+
+  await runProof(proofs, "core.cancellation-and-deadline", "core", async () => {
+    const testCase = requireCase(cases, "query");
+    const controller = new AbortController();
+    controller.abort();
+    await agent.query({ ...testCase.request, signal: controller.signal })
+      .then(() => { throw new Error("cancelled-request-accepted"); }, (error) => {
+        if (error?.code !== "request-cancelled" || error?.partialEffects !== "none") throw error;
+      });
+    await agent.query({ ...testCase.request, deadlineAt: Date.now() - 1 })
+      .then(() => { throw new Error("expired-deadline-accepted"); }, (error) => {
+        if (error?.code !== "deadline-exceeded" || error?.retryable !== true) throw error;
+      });
+  });
+
+  await runProof(proofs, "coverage.inventory", "core", async () => {
+    const testCase = requireCase(cases, "coverage");
+    if (typeof testCase.verify !== "function") throw new Error("coverage-inventory-verifier-required");
+    const result = validateCoverageEvidence(options.manifest, await testCase.verify({ manifest: options.manifest }));
+    if (!result.valid) throw new Error(result.errors.join(" | "));
   });
 
   if (declared.profiles.query) {

@@ -6,6 +6,8 @@ import {
 } from "./manifest.js";
 import { assertSchemaValue } from "./schema-validation.js";
 import { createPresentationController } from "./presentation.js";
+import { createExecutionContext } from "./execution.js";
+import { SiteAgentProblem, toSiteAgentProblem } from "./problem.js";
 
 export * from "./manifest.js";
 export * from "./site-navigator.js";
@@ -16,6 +18,9 @@ export * from "./presentation.js";
 export * from "./rendered-quality.js";
 export * from "./artifact-contract.js";
 export * from "./tutorial-runtime.js";
+export * from "./problem.js";
+export * from "./execution.js";
+export * from "./coverage.js";
 
 function now() {
   return Date.now();
@@ -34,7 +39,14 @@ function findCapability(values, id, profile) {
 }
 
 function assertAuthorized(capability, context) {
-  if (!isCapabilityAuthorized(capability, context)) throw new Error("capability-not-authorized");
+  if (!isCapabilityAuthorized(capability, context)) {
+    throw new SiteAgentProblem({
+      code: "capability-not-authorized",
+      category: "denied",
+      remediation: "request-permission",
+      requiredPermissions: [...(capability.permissionsAll || []), ...(capability.permissionsAny || [])],
+    });
+  }
 }
 
 function validateSemanticDestination(destination, manifest) {
@@ -104,22 +116,58 @@ export function createSiteAgent(options = {}) {
     })
     : null;
 
-  async function invoke(profile, capabilityId, operation) {
+  async function invoke(profile, capabilityId, request, operation) {
     const startedAt = now();
     try {
-      const value = await operation();
+      const execution = createExecutionContext(request);
+      const value = await operation(execution);
       safeTelemetry(options.report, { profile, capabilityId, status: "succeeded", durationMs: now() - startedAt });
       return value;
     } catch (error) {
+      const problem = toSiteAgentProblem(error, { correlationId: request?.correlationId });
       safeTelemetry(options.report, {
         profile,
         capabilityId,
         status: "failed",
         durationMs: now() - startedAt,
-        failureCode: String(error?.message || "failed").slice(0, 120),
+        failureCode: problem.code,
       });
-      throw error;
+      throw problem;
     }
+  }
+
+  async function getCapabilitySnapshot() {
+    const currentManifest = await getManifest();
+    const filteredManifest = filterSiteAgentManifest(currentManifest, await getContext(), { stripExtensions: true });
+    return Object.freeze({
+      standardVersion: filteredManifest.standardVersion,
+      manifestVersion: filteredManifest.manifestVersion,
+      capabilityRevision: filteredManifest.capabilityRevision,
+      manifest: filteredManifest,
+    });
+  }
+
+  async function subscribeCapabilitySnapshots(listener) {
+    if (typeof listener !== "function") throw new TypeError("capability-listener-required");
+    if (typeof options.subscribeCapabilities !== "function") throw new Error("capability-subscription-not-supported");
+    let active = true;
+    let pending = Promise.resolve();
+    const emit = () => {
+      pending = pending.then(async () => {
+        if (active) await listener(await getCapabilitySnapshot());
+      });
+      return pending;
+    };
+    const result = await options.subscribeCapabilities(emit);
+    const unsubscribe = typeof result === "function" ? result : result?.unsubscribe;
+    if (typeof unsubscribe !== "function") throw new Error("capability-subscription-invalid");
+    await emit();
+    return Object.freeze({
+      unsubscribe() {
+        active = false;
+        unsubscribe();
+      },
+    });
   }
 
   return Object.freeze({
@@ -128,20 +176,15 @@ export function createSiteAgent(options = {}) {
     getConformance: () => getSiteAgentConformance(manifest),
     getCurrentConformance: async () => getSiteAgentConformance(await getManifest()),
     async getCapabilities() {
-      return filterSiteAgentManifest(await getManifest(), await getContext(), { stripExtensions: true });
+      return (await getCapabilitySnapshot()).manifest;
     },
+    getCapabilitySnapshot,
+    subscribeCapabilitySnapshots,
     async subscribeCapabilities(listener) {
-      if (typeof listener !== "function") throw new TypeError("capability-listener-required");
-      if (typeof options.subscribeCapabilities !== "function") throw new Error("capability-subscription-not-supported");
-      const result = await options.subscribeCapabilities(async () => {
-        listener(filterSiteAgentManifest(await getManifest(), await getContext(), { stripExtensions: true }));
-      });
-      const unsubscribe = typeof result === "function" ? result : result?.unsubscribe;
-      if (typeof unsubscribe !== "function") throw new Error("capability-subscription-invalid");
-      return Object.freeze({ unsubscribe });
+      return subscribeCapabilitySnapshots(({ manifest: currentManifest }) => listener(currentManifest));
     },
     async query(request = {}) {
-      return invoke("query", request.resourceId, async () => {
+      return invoke("query", request.resourceId, request, async (execution) => {
         const currentManifest = await getManifest();
         const context = await getContext();
         const resource = findCapability(currentManifest.queryResources, request.resourceId, "query");
@@ -163,7 +206,8 @@ export function createSiteAgent(options = {}) {
         const maximum = Number(pagination.maxLimit || resource.maxResults || 100);
         const limit = Math.min(Math.max(Number(request.limit || pagination.defaultLimit || resource.maxResults || 25), 1), maximum);
         const adapter = requiredAdapter(adapters.query?.execute || adapters.query, "query");
-        const raw = await adapter({ context, request: { ...request, filters, limit, mode }, resource });
+        execution.assertActive();
+        const raw = await adapter({ context, execution, request: { ...request, filters, limit, mode }, resource });
         if (resource.resultSchema) assertSchemaValue(resource.resultSchema, raw, "query-result");
         const items = Array.isArray(raw?.items) ? raw.items.map((item) => {
           if (!item || typeof item.reference !== "string" || !item.reference.trim()) throw new Error("invalid-query-result-reference");
@@ -197,7 +241,7 @@ export function createSiteAgent(options = {}) {
       });
     },
     async subscribe(request = {}, listener) {
-      return invoke("query", request.resourceId, async () => {
+      return invoke("query", request.resourceId, request, async (execution) => {
         const currentManifest = await getManifest();
         if (typeof listener !== "function") throw new TypeError("query-subscription-listener-required");
         const context = await getContext();
@@ -214,14 +258,15 @@ export function createSiteAgent(options = {}) {
           assertSchemaValue(definition.payloadSchema, event.payload, "query-subscription-event");
           listener(event);
         };
-        const result = await subscribe({ context, request, resource, listener: guardedListener });
+        execution.assertActive();
+        const result = await subscribe({ context, execution, request, resource, listener: guardedListener });
         const unsubscribe = typeof result === "function" ? result : result?.unsubscribe;
         if (typeof unsubscribe !== "function") throw new Error("query-subscription-invalid");
         return Object.freeze({ unsubscribe });
       });
     },
     async navigate(intent = {}) {
-      return invoke("navigation", intent.destinationId, async () => {
+      return invoke("navigation", intent.destinationId, intent, async (execution) => {
         const currentManifest = await getManifest();
         const context = await getContext();
         const destination = findCapability(currentManifest.navigationDestinations, intent.destinationId, "navigation");
@@ -230,21 +275,23 @@ export function createSiteAgent(options = {}) {
         assertNestedRevealIntent(intent, destination);
         if (destination.stateSchema) assertSchemaValue(destination.stateSchema, intent.state || {}, "navigation-state");
         const adapter = requiredAdapter(adapters.navigation?.navigate || adapters.navigation, "navigation");
-        const outcome = await adapter({ context, destination, intent });
+        execution.assertActive();
+        const outcome = await adapter({ context, destination, execution, intent });
         if (!outcome || outcome.exact !== true || outcome.visible !== true) throw new Error("navigation-target-not-verified");
         assertNestedRevealOutcome(outcome, intent, destination);
         return outcome;
       });
     },
     async prepareAction(request = {}) {
-      return invoke("action", request.actionId, async () => {
+      return invoke("action", request.actionId, request, async (execution) => {
         const currentManifest = await getManifest();
         const context = await getContext();
         const action = findCapability(currentManifest.actions, request.actionId, "action");
         assertAuthorized(action, context);
         assertSchemaValue(action.inputSchema, request.input || {}, "action-input");
         const adapter = requiredAdapter(adapters.action?.prepare, "action-prepare");
-        const plan = await adapter({ action, context, request });
+        execution.assertActive();
+        const plan = await adapter({ action, context, execution, request });
         if (!plan?.planId || plan.status !== "prepared" || !plan.expiresAt) throw new Error("invalid-action-plan");
         if (!Number.isFinite(Date.parse(plan.expiresAt))) throw new Error("invalid-action-plan-expiry");
         if (action.confirmation !== "none" && plan.confirmation !== action.confirmation) throw new Error("invalid-action-confirmation");
@@ -253,7 +300,7 @@ export function createSiteAgent(options = {}) {
       });
     },
     async confirmAction(request = {}) {
-      return invoke("action", request.actionId, async () => {
+      return invoke("action", request.actionId, request, async (execution) => {
         if (consumedPlans.has(request.planId)) throw new Error("action-plan-already-consumed");
         const prepared = preparedPlans.get(request.planId);
         if (!prepared || prepared.actionId !== request.actionId) throw new Error("action-plan-not-prepared");
@@ -266,7 +313,8 @@ export function createSiteAgent(options = {}) {
           assertSchemaValue(action.confirmationSchema, request.confirmation, "action-confirmation");
         }
         const adapter = requiredAdapter(adapters.action?.confirm, "action-confirm");
-        const result = await adapter({ action, context, request });
+        execution.assertActive();
+        const result = await adapter({ action, context, execution, request });
         const acceptedStatuses = new Set(["confirmed", "already-applied", "reconfirmation-required", "working"]);
         if (!result || !acceptedStatuses.has(result.status)) throw new Error("action-confirmation-failed");
         if (result.status === "working") {
@@ -299,7 +347,7 @@ export function createSiteAgent(options = {}) {
       });
     },
     async cancelAction(request = {}) {
-      return invoke("action", request.actionId, async () => {
+      return invoke("action", request.actionId, request, async (execution) => {
         if (consumedPlans.has(request.planId)) throw new Error("action-plan-already-consumed");
         const prepared = preparedPlans.get(request.planId);
         if (!prepared || prepared.actionId !== request.actionId) throw new Error("action-plan-not-prepared");
@@ -308,21 +356,23 @@ export function createSiteAgent(options = {}) {
         const action = findCapability(currentManifest.actions, request.actionId, "action");
         assertAuthorized(action, context);
         const adapter = requiredAdapter(adapters.action?.cancel, "action-cancel");
-        const result = await adapter({ action, context, request });
+        execution.assertActive();
+        const result = await adapter({ action, context, execution, request });
         if (!result || result.status !== "canceled") throw new Error("action-cancel-failed");
         consumedPlans.add(request.planId);
         return result;
       });
     },
     async getTask(request = {}) {
-      return invoke("action", request.actionId, async () => {
+      return invoke("action", request.actionId, request, async (execution) => {
         const currentManifest = await getManifest();
         const context = await getContext();
         const action = findCapability(currentManifest.actions, request.actionId, "action");
         assertAuthorized(action, context);
         if (action.taskSupport === "forbidden") throw new Error("action-task-not-supported");
         const getTask = requiredAdapter(adapters.action?.getTask, "action-task-get");
-        const task = await getTask({ action, context, request });
+        execution.assertActive();
+        const task = await getTask({ action, context, execution, request });
         if (!task?.taskId || !new Set(["working", "completed", "failed", "canceled"]).has(task.status)) {
           throw new Error("invalid-action-task");
         }
@@ -331,14 +381,15 @@ export function createSiteAgent(options = {}) {
       });
     },
     async cancelTask(request = {}) {
-      return invoke("action", request.actionId, async () => {
+      return invoke("action", request.actionId, request, async (execution) => {
         const currentManifest = await getManifest();
         const context = await getContext();
         const action = findCapability(currentManifest.actions, request.actionId, "action");
         assertAuthorized(action, context);
         if (action.taskSupport === "forbidden") throw new Error("action-task-not-supported");
         const cancelTask = requiredAdapter(adapters.action?.cancelTask, "action-task-cancel");
-        const task = await cancelTask({ action, context, request });
+        execution.assertActive();
+        const task = await cancelTask({ action, context, execution, request });
         if (!task?.taskId || task.status !== "canceled") throw new Error("action-task-cancel-failed");
         return task;
       });

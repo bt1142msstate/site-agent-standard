@@ -179,6 +179,18 @@ export default function createConformanceTarget(manifest) {
         },
       },
       denial: { method: "query", request: { resourceId: "orders" } },
+      coverage: {
+        verify: ({ manifest: currentManifest }) => ({
+          source: "host-inventory",
+          inventoryDigest: "a".repeat(64),
+          dimensions: [
+            { kind: "query", discovered: currentManifest.queryResources.length, covered: currentManifest.queryResources.length, exempted: 0, unresolved: 0 },
+            { kind: "navigation", discovered: currentManifest.navigationDestinations.length, covered: currentManifest.navigationDestinations.length, exempted: 0, unresolved: 0 },
+            { kind: "action", discovered: currentManifest.actions.length, covered: currentManifest.actions.length, exempted: 0, unresolved: 0 },
+          ],
+          exemptions: [],
+        }),
+      },
     },
   };
 }

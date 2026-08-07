@@ -38,6 +38,15 @@ capabilities identify a replacement or sunset time. Sunset capabilities MUST
 NOT execute. Permission-filtered manifests and bindings MUST preserve lifecycle
 metadata so clients can migrate without guessing.
 
+### Revisioned capability snapshots
+
+A runtime MUST expose the caller-authorized catalog as a snapshot containing
+`standardVersion`, `manifestVersion`, `capabilityRevision`, and the filtered
+manifest. When the active page, session, permissions, feature availability, or
+adapter semantics change, a subscribed client MUST receive a new snapshot. A
+client MUST NOT continue invoking a removed or sunset capability from an older
+snapshot, and the host still reauthorizes every invocation.
+
 ## Runtime validation
 
 All filter values, Query results, Navigation state, Action inputs,
@@ -96,6 +105,29 @@ drift alone is not a semantic conflict.
 Long-running Actions declare `taskSupport`. Durable task IDs are opaque and
 actor scoped. Task status, progress, cancellation, and result retrieval do not
 weaken authorization, idempotency, output validation, or audit requirements.
+
+## Cancellation, deadlines, and problems
+
+Every Query, Navigation, Action, subscription, and task operation MAY carry an
+abort signal, deadline, and privacy-safe correlation ID. The runtime MUST reject
+an already-cancelled or expired request before calling its host adapter. Host
+adapters MUST observe cancellation and deadlines before irreversible effects
+and SHOULD stop cooperative work promptly. Cancellation never implies rollback.
+
+Failures MUST be representable as a transport-neutral structured problem with a
+stable code, category, retryability, remediation, required-permission summary,
+correlation ID, and `partialEffects` classification. Serialized problems MUST
+exclude stacks, causes, prompts, records, private references, and credentials.
+Transports MAY project this structure into their native error format.
+
+## Coverage evidence
+
+A complete coverage claim MUST be backed by executable evidence generated from
+an independent host inventory, not by recounting the manifest. Evidence records
+a stable inventory digest and separate Query, Navigation, and Action dimensions
+with discovered, covered, reviewed-exempt, and unresolved counts. Every reviewed
+exemption uses a hashed source identifier and a reason. Complete conformance
+requires zero unresolved inventory entries.
 
 ## Bindings
 

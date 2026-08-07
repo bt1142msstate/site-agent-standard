@@ -11,10 +11,12 @@ import {
   negotiateSiteAgentVersion,
   registerWebMcpTools,
   runSiteAgentConformance,
+  SiteAgentProblem,
   stableFingerprintPayload,
   validateRenderedQualityEvidence,
   validateSiteAgentManifest,
   validateTutorialArtifactAcceptanceEvidence,
+  validateCoverageEvidence,
 } from "../../src/site-agent.js";
 import createConformanceTarget from "../../examples/basic/conformance.mjs";
 
@@ -323,7 +325,7 @@ test("full conformance requires and records executable host proofs", async () =>
   const result = await runSiteAgentConformance({ manifest, ...createConformanceTarget(manifest) });
   assert.equal(result.fullyConformant, true, JSON.stringify(result.errors));
   assert.equal(result.executionVerified, true);
-  assert.equal(result.proofs.length, 13);
+  assert.equal(result.proofs.length, 16);
   assert.ok(result.proofs.every(({ status }) => status === "passed"));
 });
 
@@ -347,11 +349,58 @@ test("dynamic capability revisions take effect without recreating the agent", as
     context: { authenticated: true, permissions: ["orders.view"] },
     adapters: { query: async () => ({ items: [], total: 0 }) },
   });
-  let observed;
-  await agent.subscribeCapabilities((manifest) => { observed = manifest.capabilityRevision; });
+  const observed = [];
+  const initial = await agent.getCapabilitySnapshot();
+  assert.equal(initial.capabilityRevision, "example-orders-1");
+  await agent.subscribeCapabilitySnapshots((snapshot) => { observed.push(snapshot.capabilityRevision); });
+  assert.deepEqual(observed, ["example-orders-1"]);
   current.capabilityRevision = "example-orders-2";
   current.queryResources[0].status = "sunset";
   await notify();
-  assert.equal(observed, "example-orders-2");
+  assert.deepEqual(observed, ["example-orders-1", "example-orders-2"]);
   await assert.rejects(agent.query({ resourceId: "orders" }), /query-capability-sunset/);
+});
+
+test("cancellation and deadlines stop before host adapters and return structured problems", async () => {
+  let calls = 0;
+  const agent = createSiteAgent({
+    manifest: example(),
+    context: { authenticated: true, permissions: ["orders.view"] },
+    adapters: { query: async () => { calls += 1; return { items: [], total: 0 }; } },
+  });
+  const controller = new AbortController();
+  controller.abort();
+  await assert.rejects(
+    agent.query({ resourceId: "orders", signal: controller.signal }),
+    (error) => error instanceof SiteAgentProblem
+      && error.code === "request-cancelled"
+      && error.partialEffects === "none",
+  );
+  await assert.rejects(
+    agent.query({ resourceId: "orders", deadlineAt: Date.now() - 1 }),
+    (error) => error instanceof SiteAgentProblem
+      && error.code === "deadline-exceeded"
+      && error.retryable === true,
+  );
+  assert.equal(calls, 0);
+});
+
+test("complete coverage claims require independent resolved inventory evidence", () => {
+  const manifest = example();
+  const evidence = {
+    source: "host-inventory",
+    inventoryDigest: "b".repeat(64),
+    dimensions: [
+      { kind: "query", discovered: 1, covered: 1, exempted: 0, unresolved: 0 },
+      { kind: "navigation", discovered: 1, covered: 1, exempted: 0, unresolved: 0 },
+      { kind: "action", discovered: 1, covered: 1, exempted: 0, unresolved: 0 },
+    ],
+    exemptions: [],
+  };
+  assert.equal(validateCoverageEvidence(manifest, evidence).valid, true);
+  evidence.dimensions[2] = { kind: "action", discovered: 2, covered: 1, exempted: 0, unresolved: 1 };
+  assert.match(
+    validateCoverageEvidence(manifest, evidence).errors.join("\n"),
+    /coverage-complete-claim-has-unresolved:action/,
+  );
 });

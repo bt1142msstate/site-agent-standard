@@ -169,6 +169,9 @@ export * from "./presentation-audio.js";
 export * from "./rendered-quality.js";
 export * from "./artifact-contract.js";
 export * from "./tutorial-runtime.js";
+export * from "./problem.js";
+export * from "./execution.js";
+export * from "./coverage.js";
 
 export interface SiteAgentContext {
   authenticated: boolean;
@@ -199,6 +202,16 @@ export interface QueryRequest {
   sort?: string;
   limit?: number;
   cursor?: string;
+  signal?: AbortSignal;
+  deadlineAt?: string | number;
+  correlationId?: string;
+}
+
+export interface CapabilitySnapshot {
+  standardVersion: SiteAgentManifest["standardVersion"];
+  manifestVersion: string;
+  capabilityRevision: string;
+  manifest: SiteAgentManifest;
 }
 
 export interface QueryItem {
@@ -297,15 +310,17 @@ export declare function createSiteAgent(options: SiteAgentOptions): {
   getConformance(): ReturnType<typeof getSiteAgentConformance>;
   getCurrentConformance(): Promise<ReturnType<typeof getSiteAgentConformance>>;
   getCapabilities(): Promise<SiteAgentManifest>;
+  getCapabilitySnapshot(): Promise<CapabilitySnapshot>;
+  subscribeCapabilitySnapshots(listener: (snapshot: CapabilitySnapshot) => void | Promise<void>): Promise<{ unsubscribe(): void }>;
   subscribeCapabilities(listener: (manifest: SiteAgentManifest) => void): Promise<{ unsubscribe(): void }>;
   query(request: QueryRequest): Promise<QueryResult>;
   subscribe(request: QueryRequest, listener: (event: unknown) => void): Promise<{ unsubscribe(): void }>;
-  navigate(intent: SemanticDestination): Promise<unknown>;
-  prepareAction(request: { actionId: string; input?: unknown; target?: unknown }): Promise<ActionPlan>;
-  confirmAction(request: { actionId: string; planId: string; confirmation?: unknown }): Promise<unknown>;
-  cancelAction(request: { actionId: string; planId: string }): Promise<unknown>;
-  getTask(request: { actionId: string; taskId: string }): Promise<ActionTask>;
-  cancelTask(request: { actionId: string; taskId: string }): Promise<ActionTask>;
+  navigate(intent: SemanticDestination & import("./execution.js").SiteAgentExecutionRequest): Promise<unknown>;
+  prepareAction(request: { actionId: string; input?: unknown; target?: unknown } & import("./execution.js").SiteAgentExecutionRequest): Promise<ActionPlan>;
+  confirmAction(request: { actionId: string; planId: string; confirmation?: unknown } & import("./execution.js").SiteAgentExecutionRequest): Promise<unknown>;
+  cancelAction(request: { actionId: string; planId: string } & import("./execution.js").SiteAgentExecutionRequest): Promise<unknown>;
+  getTask(request: { actionId: string; taskId: string } & import("./execution.js").SiteAgentExecutionRequest): Promise<ActionTask>;
+  cancelTask(request: { actionId: string; taskId: string } & import("./execution.js").SiteAgentExecutionRequest): Promise<ActionTask>;
 };
 
 export * from "./site-navigator.js";

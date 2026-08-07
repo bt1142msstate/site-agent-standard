@@ -61,6 +61,15 @@ The CLI MUST NOT report full conformance without an executable adapter.
 15. Validate source fingerprints using stable-content normalization, fully
     decode accepted video and required audio through the mapped timeline, and
     prove the deployment directory was clean, symlink-free, and isolated.
+16. Obtain a permission-filtered capability snapshot and prove its standard,
+    manifest, and capability revisions match the effective catalog.
+17. Cancel and deadline-expire representative operations before host dispatch;
+    prove the host adapter was not called and the structured problem reports no
+    partial effects. Hosts additionally test cooperative cancellation around
+    their own irreversible boundaries.
+18. Generate Query, Navigation, and Action coverage evidence from independent
+    host inventories. Validate counts, stable digest, reviewed exemptions, and
+    zero unresolved entries for complete claims.
 
 An exporter that claims compatibility with another protocol MUST validate its
 generated artifact against that protocol's official schema when one exists and

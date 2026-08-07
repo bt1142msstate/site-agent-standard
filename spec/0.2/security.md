@@ -49,3 +49,15 @@
 16. Conformance fixtures MUST be isolated from production data, avoid real
     notifications or financial effects, and prove cleanup after success,
     cancellation, timeout, and partial failure.
+17. Capability subscriptions MUST follow active session and permission
+    lifecycle, emit revisioned permission-filtered snapshots, and release all
+    listeners when their consumer disconnects.
+18. Abort and deadline signals MUST propagate to host adapters. An adapter MUST
+    check them before irreversible effects and report `partialEffects`
+    accurately when work may already have crossed that boundary.
+19. Structured problems MUST expose only safe remediation metadata. Stack
+    traces, causes, private references, record contents, prompts, selectors,
+    paths, and credentials MUST NOT cross the host boundary.
+20. Complete coverage MUST be proven from an independent host inventory with
+    hashed reviewed exemptions. A manifest MUST NOT attest to its own complete
+    coverage by counting only declared capabilities.

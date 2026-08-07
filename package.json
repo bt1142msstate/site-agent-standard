@@ -1,6 +1,6 @@
 {
   "name": "@bt1142msstate/site-agent-standard",
-  "version": "0.12.1",
+  "version": "0.13.0",
   "description": "A transport-neutral standard and reference runtime for permission-scoped query, verified navigation, safe actions, and instructional presentation.",
   "type": "module",
   "main": "./src/site-agent.js",
@@ -28,6 +28,18 @@
     "./conformance": {
       "types": "./src/conformance.d.ts",
       "import": "./src/conformance.js"
+    },
+    "./problems": {
+      "types": "./src/problem.d.ts",
+      "import": "./src/problem.js"
+    },
+    "./execution": {
+      "types": "./src/execution.d.ts",
+      "import": "./src/execution.js"
+    },
+    "./coverage": {
+      "types": "./src/coverage.d.ts",
+      "import": "./src/coverage.js"
     },
     "./presentation": {
       "types": "./src/presentation.d.ts",
