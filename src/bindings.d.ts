@@ -12,6 +12,8 @@ export declare function registerWebMcpTools(options: {
   modelContext?: unknown;
   agent: unknown;
   exposedTo?: string[];
+  queryExposure?: "expanded" | "brokered";
+  maxExpandedQueryTools?: number;
 }): Promise<{ readonly registeredToolNames: readonly string[]; unregister(): void }>;
 export declare function createArazzoBinding(manifest: SiteAgentManifest, options: {
   sourceDescriptions: Array<{ name: string; type: "openapi" | "asyncapi" | "arazzo"; url: string }>;

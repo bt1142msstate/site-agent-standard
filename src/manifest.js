@@ -2,7 +2,7 @@ import { validateSchemaDefinition } from "./schema-validation.js";
 
 export const SITE_AGENT_STANDARD_VERSION = "0.2";
 export const SITE_AGENT_SUPPORTED_VERSIONS = Object.freeze(["0.1", "0.2"]);
-export const SITE_AGENT_PROFILES = Object.freeze(["core", "query", "navigation", "action", "presentation"]);
+export const SITE_AGENT_PROFILES = Object.freeze(["core", "query", "navigation", "action", "presentation", "operability"]);
 
 export function negotiateSiteAgentVersion(offeredVersions, supportedVersions = SITE_AGENT_SUPPORTED_VERSIONS) {
   const offered = Array.isArray(offeredVersions) ? offeredVersions : [offeredVersions];
@@ -106,6 +106,30 @@ function validateManifestInternal(manifest, options = {}) {
   if (!options.publicDocument && manifest.profiles?.includes("query") && !queryResources.length) errors.push("The query profile requires queryResources.");
   if (!options.publicDocument && manifest.profiles?.includes("navigation") && !destinations.length) errors.push("The navigation profile requires navigationDestinations.");
   if (!options.publicDocument && manifest.profiles?.includes("action") && !actions.length) errors.push("The action profile requires actions.");
+  if (manifest.profiles?.includes("operability")) {
+    const operability = manifest.operability;
+    if (!manifest.profiles.includes("query") || !manifest.profiles.includes("navigation")) {
+      errors.push("The operability profile requires query and navigation profiles.");
+    }
+    if (!isObject(operability)) {
+      errors.push("The operability profile requires an operability declaration.");
+    } else {
+      if (operability.evidenceSource !== "independent-operability-run") errors.push("operability.evidenceSource is invalid.");
+      if (operability.coverage !== "all-active-capabilities") errors.push("operability.coverage must include all active capabilities.");
+      if (!Array.isArray(operability.viewports) || !operability.viewports.includes("desktop")
+        || !operability.viewports.some((value) => /mobile|touch/.test(value))) {
+        errors.push("operability.viewports must include desktop and a mobile or touch viewport.");
+      }
+      if (!Array.isArray(operability.inputModes) || !operability.inputModes.includes("keyboard")
+        || !operability.inputModes.includes("programmatic")) {
+        errors.push("operability.inputModes must include keyboard and programmatic navigation.");
+      }
+      if (operability.accessibilityRules !== "act-compatible-automated-and-manual") errors.push("operability.accessibilityRules is invalid.");
+      if (operability.wcagConformanceClaim !== false) errors.push("operability.wcagConformanceClaim must be false.");
+      if (!Number.isInteger(operability.navigationBudgetMs) || operability.navigationBudgetMs < 100) errors.push("operability.navigationBudgetMs is invalid.");
+      if (!Number.isInteger(operability.queryBudgetMs) || operability.queryBudgetMs < 50) errors.push("operability.queryBudgetMs is invalid.");
+    }
+  }
   if (manifest.profiles?.includes("presentation")) {
     const presentation = manifest.presentation;
     if (!isObject(presentation)) {
@@ -180,6 +204,10 @@ function validateManifestInternal(manifest, options = {}) {
           if (stepIds.has(step.id)) errors.push(`${stepPath}.id is duplicated.`);
           stepIds.add(step.id);
           if (!revealStepKinds.has(step.kind)) errors.push(`${stepPath}.kind is invalid.`);
+          if (step.timeoutMs !== undefined
+            && (!Number.isInteger(step.timeoutMs) || step.timeoutMs < 100 || step.timeoutMs > 30_000)) {
+            errors.push(`${stepPath}.timeoutMs is invalid.`);
+          }
           if (step.kind === "state") {
             if (!Array.isArray(step.stateKeys) || !step.stateKeys.length) errors.push(`${stepPath}.stateKeys must not be empty.`);
             for (const key of step.stateKeys || []) {
@@ -206,10 +234,24 @@ function validateManifestInternal(manifest, options = {}) {
     if (!new Set(["local", "host"]).has(resource.execution)) errors.push(`${path}.execution must be local or host.`);
     if (!Array.isArray(resource.modes) || !resource.modes.length) errors.push(`${path}.modes must not be empty.`);
     if (!isObject(resource.filters)) errors.push(`${path}.filters must be an object of semantic filter schemas.`);
+    for (const field of ["aliases", "keywords", "examples"]) {
+      if (resource[field] !== undefined && (!Array.isArray(resource[field])
+        || resource[field].some((value) => !String(value || "").trim())
+        || new Set(resource[field]).size !== resource[field].length)) {
+        errors.push(`${path}.${field} must contain unique non-empty strings.`);
+      }
+    }
     for (const [filterId, filterSchema] of Object.entries(resource.filters || {})) {
       validateJsonSchema(filterSchema, `${path}.filters.${filterId}`, errors);
     }
     if (resource.destinationId && !destinationIds.has(resource.destinationId)) errors.push(`${path}.destinationId is unknown.`);
+    if (resource.resultTargetKind && !resource.destinationId) errors.push(`${path}.resultTargetKind requires destinationId.`);
+    if (resource.destinationId && destinationIds.has(resource.destinationId)) {
+      const destination = destinations.find(({ id }) => id === resource.destinationId);
+      if (resource.resultTargetKind && !destination.targetKinds.includes(resource.resultTargetKind)) {
+        errors.push(`${path}.resultTargetKind is not allowed by its destination.`);
+      }
+    }
     if (resource.resultSchema !== undefined) validateJsonSchema(resource.resultSchema, `${path}.resultSchema`, errors);
     if (strictV02) {
       validateJsonSchema(resource.resultSchema, `${path}.resultSchema`, errors);
@@ -427,12 +469,7 @@ export function filterSiteAgentManifest(manifest, context = {}, options = {}) {
   const actions = filter(manifest.actions);
   const events = filter(manifest.events || []);
   const workflows = filter(manifest.workflows || []);
-  const neededDestinations = new Set([
-    ...queryResources.map(({ destinationId }) => destinationId),
-    ...actions.map(({ destinationId }) => destinationId),
-  ].filter(Boolean));
-  const navigationDestinations = filter(manifest.navigationDestinations)
-    .filter(({ id, visibility }) => visibility === "public" || neededDestinations.has(id));
+  const navigationDestinations = filter(manifest.navigationDestinations);
   const result = clone({
     ...manifest,
     queryResources,
@@ -467,8 +504,10 @@ export function getSiteAgentConformance(manifest) {
     coverage,
     declaredComplete,
     declaredTutorialComplete: declaredComplete && profiles.presentation,
+    declaredOperabilityComplete: declaredComplete && profiles.operability,
     executionVerified: false,
     fullyConformant: false,
     tutorialConformant: false,
+    operabilityConformant: false,
   };
 }

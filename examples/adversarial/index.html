@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Site Agent adversarial navigation fixture</title>
+  <style>
+    :root { color-scheme: light; font-family: system-ui, sans-serif; color: #10243b; background: #f3f7f8; }
+    * { box-sizing: border-box; }
+    body { margin: 0; }
+    header { position: sticky; top: 0; z-index: 20; padding: 1rem; background: #10243b; color: white; }
+    main { max-width: 70rem; margin: auto; padding: 1rem; }
+    button, input { min-height: 44px; font: inherit; }
+    button { padding: .65rem .9rem; border: 1px solid #8aa7b5; border-radius: .6rem; background: white; color: #10243b; }
+    button:focus-visible, input:focus-visible, summary:focus-visible { outline: 4px solid #ffb13b; outline-offset: 3px; }
+    [role="tablist"] { display: flex; gap: .5rem; overflow-x: auto; padding-block: .5rem; }
+    [role="tabpanel"][hidden], dialog:not([open]) { display: none; }
+    dialog { width: min(46rem, calc(100vw - 2rem)); max-height: calc(100dvh - 2rem); border: 0; border-radius: 1rem; padding: 0; }
+    dialog::backdrop { background: rgb(16 36 59 / .55); }
+    .dialog-body { max-height: calc(100dvh - 2rem); overflow: auto; padding: 1rem; }
+    details { border: 1px solid #cad8de; border-radius: .75rem; padding: .75rem; }
+    summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; }
+    .virtual-list { height: 16rem; overflow: auto; border: 1px solid #cad8de; border-radius: .75rem; }
+    .spacer { height: 42rem; }
+    .record { margin: 1rem; padding: 1rem; border-radius: .75rem; background: #e9f5f0; }
+    iframe { display: block; width: 100%; height: 12rem; border: 1px solid #8aa7b5; border-radius: .75rem; }
+    .status { min-height: 1.5rem; }
+  </style>
+</head>
+<body>
+  <header>Adversarial navigation fixture</header>
+  <main>
+    <p>This isolated fixture exercises seven semantic reveal layers without selectors in the capability contract.</p>
+    <label for="catalog-search">Find a query capability</label>
+    <input id="catalog-search" type="search" autocomplete="off" placeholder="Try invoice history">
+    <p class="status" role="status" aria-live="polite"></p>
+    <div role="tablist" aria-label="Operations areas">
+      <button role="tab" aria-selected="true" aria-controls="overview-panel" id="overview-tab">Overview</button>
+      <button role="tab" aria-selected="false" aria-controls="billing-panel" id="billing-tab" tabindex="-1">Billing</button>
+    </div>
+    <section role="tabpanel" id="overview-panel" aria-labelledby="overview-tab">Choose Billing to continue.</section>
+    <section role="tabpanel" id="billing-panel" aria-labelledby="billing-tab" hidden>
+      <button id="open-family">Open family workspace</button>
+    </section>
+    <dialog id="family-dialog" aria-labelledby="family-heading">
+      <div class="dialog-body">
+        <h2 id="family-heading">Family workspace</h2>
+        <details id="history">
+          <summary>Invoice history</summary>
+          <div class="virtual-list" id="invoice-list" tabindex="0">
+            <div class="spacer" aria-hidden="true"></div>
+            <article class="record" id="invoice-record" tabindex="-1">
+              <h3>Invoice AA-2048</h3>
+              <button id="load-proof">Load payment proof</button>
+              <div id="shadow-host"></div>
+            </article>
+          </div>
+        </details>
+        <button id="close-family">Close</button>
+      </div>
+    </dialog>
+  </main>
+  <script type="module">
+    const tabs = [...document.querySelectorAll('[role="tab"]')];
+    function selectTab(selected) {
+      for (const tab of tabs) {
+        const active = tab === selected;
+        tab.setAttribute("aria-selected", String(active));
+        tab.tabIndex = active ? 0 : -1;
+        document.getElementById(tab.getAttribute("aria-controls")).hidden = !active;
+      }
+      selected.focus();
+    }
+    for (const tab of tabs) {
+      tab.addEventListener("click", () => selectTab(tab));
+      tab.addEventListener("keydown", (event) => {
+        if (!new Set(["ArrowLeft", "ArrowRight"]).has(event.key)) return;
+        event.preventDefault();
+        const direction = event.key === "ArrowRight" ? 1 : -1;
+        selectTab(tabs[(tabs.indexOf(tab) + direction + tabs.length) % tabs.length]);
+      });
+    }
+    const dialog = document.getElementById("family-dialog");
+    document.getElementById("open-family").addEventListener("click", () => dialog.showModal());
+    document.getElementById("close-family").addEventListener("click", () => dialog.close());
+    document.getElementById("load-proof").addEventListener("click", () => {
+      const host = document.getElementById("shadow-host");
+      if (!host.shadowRoot) {
+        const root = host.attachShadow({ mode: "open" });
+        const frame = document.createElement("iframe");
+        frame.title = "Payment proof";
+        frame.srcdoc = '<!doctype html><html lang="en"><body><button id="exact-proof">Verified payment proof</button></body></html>';
+        root.append(frame);
+      }
+    });
+    const search = document.getElementById("catalog-search");
+    search.addEventListener("input", () => {
+      document.querySelector(".status").textContent = search.value.trim()
+        ? `Best capability: billing.invoice-history (${search.value.trim()})`
+        : "";
+    });
+    window.adversarialFixture = {
+      selectBilling: () => selectTab(document.getElementById("billing-tab")),
+      openFamily: () => dialog.showModal(),
+      openHistory: () => { document.getElementById("history").open = true; },
+      revealRecord: () => document.getElementById("invoice-record").scrollIntoView({ block: "center" }),
+      loadProof: () => document.getElementById("load-proof").click(),
+    };
+  </script>
+</body>
+</html>

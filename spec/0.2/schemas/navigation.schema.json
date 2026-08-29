@@ -34,6 +34,8 @@
                 "properties": {
                   "id": { "type": "string", "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$" },
                   "kind": { "enum": ["route", "state", "nested-resource", "target"] },
+                  "description": { "type": "string", "minLength": 8, "maxLength": 240 },
+                  "timeoutMs": { "type": "integer", "minimum": 100, "maximum": 30000 },
                   "stateKeys": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string" } },
                   "targetKinds": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string" } }
                 },

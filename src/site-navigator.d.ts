@@ -132,3 +132,4 @@ export declare function createSiteNavigator(options: NavigationControllerOptions
   stop(reason?: string): void;
 };
 export declare const createVerifiedNavigationController: typeof createSiteNavigator;
+export * from "./navigation-reveal.js";

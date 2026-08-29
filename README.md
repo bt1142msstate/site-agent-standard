@@ -16,6 +16,8 @@ profiles without collapsing them into one unsafe API:
   the site's authoritative domain handlers.
 - **Presentation** optionally renders those capabilities with an instructional
   cursor, framing, click ripple, visible typing, and local sound cues.
+- **Operability** optionally proves every active query and destination across
+  desktop and mobile/touch with transparent automated and manual evidence.
 
 The repository includes the normative 0.2 draft, a schema-validating reference
 runtime, executable CLI conformance proofs, MCP/WebMCP/Arazzo/AsyncAPI bindings,
@@ -24,7 +26,7 @@ and the battle-tested Site Navigator engine as the Navigation implementation.
 ## Install
 
 ```bash
-npm install github:bt1142msstate/site-agent-standard#v0.14.0
+npm install github:bt1142msstate/site-agent-standard#v0.15.0
 ```
 
 ```js
@@ -91,6 +93,12 @@ the current MCP Tasks extension: server-directed creation, `input_required`
 updates, cooperative cancellation, caller-scoped handles, and no task listing.
 The browser and MCP binding guidance now states the transport security and
 negotiation boundaries explicitly.
+
+Version `0.15.0` adds stepwise verified reveal orchestration, permission-safe
+query discovery and bounded batch reads, brokered WebMCP query catalogs, and an
+independent Operability profile. Operability measures exact navigation, query
+behavior, and ACT-compatible accessibility evidence without claiming that an
+automated score establishes WCAG conformance.
 
 ```json
 {
@@ -238,6 +246,8 @@ const result = await agent.query({
   resourceId: "orders",
   filters: { status: "open", period: "year-to-date" },
 });
+
+const catalog = await agent.findQueryResources({ text: "unpaid family invoices" });
 
 await agent.navigate(result.items[0].destination);
 

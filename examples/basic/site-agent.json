@@ -5,7 +5,17 @@
   "capabilityRevision": "example-orders-1",
   "id": "example.orders",
   "name": "Example order site",
-  "profiles": ["core", "query", "navigation", "action", "presentation"],
+  "profiles": ["core", "query", "navigation", "action", "presentation", "operability"],
+  "operability": {
+    "evidenceSource": "independent-operability-run",
+    "coverage": "all-active-capabilities",
+    "viewports": ["desktop", "mobile-touch"],
+    "inputModes": ["keyboard", "pointer", "programmatic"],
+    "accessibilityRules": "act-compatible-automated-and-manual",
+    "wcagConformanceClaim": false,
+    "navigationBudgetMs": 5000,
+    "queryBudgetMs": 1000
+  },
   "presentation": {
     "preset": "standard-instructional-v2",
     "cursor": "modern-stemless-pointer",
@@ -70,7 +80,8 @@
         },
         "additionalProperties": true
       },
-      "destinationId": "orders.detail"
+      "destinationId": "orders.detail",
+      "resultTargetKind": "order"
     }
   ],
   "navigationDestinations": [

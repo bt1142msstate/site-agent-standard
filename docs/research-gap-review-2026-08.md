@@ -3,6 +3,25 @@
 This review compares Site Agent Standard 0.2 with adjacent primary standards.
 It is informative; `spec/0.2/` remains normative.
 
+The newest navigability, query-discovery, accessibility, and benchmark analysis
+is recorded in
+[the August operability benchmark](nested-navigation-query-operability-2026-08.md).
+
+## Adopted in package v0.15.0
+
+- **Stepwise verified nested reveal.** The coordinator now executes and verifies
+  each semantic route, state, nested-resource, and target layer separately with
+  cancellation and deadlines.
+- **Scalable query discovery.** Permission-filtered lexical discovery, bounded
+  batches, semantic aliases/examples, and brokered WebMCP tools keep large
+  frontend/backend catalogs usable without leaking denied resources.
+- **Independent operability evidence.** A new optional profile measures exact
+  navigation, query behavior, and ACT-compatible automated/manual evidence at
+  desktop and mobile-touch sizes while explicitly prohibiting a WCAG claim.
+- **Pathological reusable fixture.** Browser tests traverse tabs, modal,
+  disclosure, virtualized scrolling, Shadow DOM, iframe, and an exact final
+  control using keyboard-operable patterns.
+
 ## Adopted in package v0.14.0
 
 - **Live WebMCP registration lifecycle.** The reference binding now follows

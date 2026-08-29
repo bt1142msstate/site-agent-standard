@@ -24,6 +24,10 @@ database schema, or a required browser or network transport.
   framing, click feedback, visible typing, local sound cues, mute, and reduced
   motion. See [Presentation](presentation.md) and
   [tutorial artifact acceptance](artifacts.md).
+- **Operability** validates independent exact-navigation, bounded-query, and
+  ACT-compatible accessibility evidence across desktop and mobile/touch. Its
+  aggregate score is a release signal and MUST NOT be represented as a WCAG
+  conformance determination.
 
 ## Version and capability lifecycle
 
@@ -82,7 +86,10 @@ selected record, filter, range, tab, or open disclosure, is part of the same
 destination intent.
 
 The Query result MUST bind its source provenance to an opaque target reference
-and declared target kind. Navigation MUST apply and verify every reveal step
+and declared target kind. A Query resource MAY declare `resultTargetKind` as a
+safe resource-wide default; a single-kind destination MAY supply that kind by
+safe inference. Otherwise each result supplies its own allowed exact kind.
+Navigation MUST apply and verify every reveal step
 before it reports the final target visible. Reaching the outer page, resource
 card, download link, viewer shell, or document cover does not satisfy the
 contract. An adapter MUST fail when it cannot reveal the exact nested source;
@@ -92,6 +99,35 @@ Reveal declarations contain semantic step IDs, state keys, and target kinds.
 They never contain selectors, model-authored URLs, database paths, credentials,
 or document storage internals. Hosts remain responsible for mapping those
 semantic declarations to their own components and document viewers.
+
+A conforming stepwise coordinator invokes only the semantic host handler for
+the current step and MUST independently verify its observable result before
+advancing. Every step is bounded and cancellable. A timeout, missing handler,
+out-of-order proof, or inexact final target fails the whole navigation.
+
+## Query discovery and catalog scale
+
+Query resources MAY declare aliases, keywords, and example information needs.
+Discovery MUST search only the caller's current permission-filtered resources
+and MUST NOT expose denied capability metadata. Batch reads remain bounded,
+reauthorize and validate each individual request, and report partial failure
+without disguising it as complete success.
+
+Bindings MAY broker a large catalog behind a discovery tool and a generic read
+tool. Brokerage changes tool exposure only; it does not weaken resource IDs,
+schemas, limits, provenance, authorization, or freshness semantics.
+
+## Operability evidence
+
+An Operability claim requires an independent inventory digest, every active
+destination at all declared desktop and mobile/touch viewports, every active
+Query resource, keyboard and programmatic input modes, bounded durations, and
+ACT-compatible automated plus manual or hybrid accessibility-rule evidence.
+Navigation evidence proves exact state, visible and unobscured focus, keyboard
+reachability, no trap, and full reveal depth. Query evidence proves allowed and
+denied cases, filters, result schemas, bounds, empty/error states, and
+provenance. Reports keep navigation, query, and tested accessibility pass rates
+separate even when presenting an aggregate release score.
 
 ## Action reconciliation
 

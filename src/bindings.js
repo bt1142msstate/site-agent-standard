@@ -117,8 +117,7 @@ export async function registerWebMcpTools(options = {}) {
   let subscription = null;
   let pending = Promise.resolve();
 
-  const describeTools = (manifest) => [
-    ...manifest.queryResources.filter(({ status }) => status !== "sunset").map((resource) => ({
+  const describeExpandedQueryTools = (manifest) => manifest.queryResources.filter(({ status }) => status !== "sunset").map((resource) => ({
       key: `query.${resource.id}`,
       definition: {
       name: `query.${resource.id}`,
@@ -138,7 +137,56 @@ export async function registerWebMcpTools(options = {}) {
       annotations: { readOnlyHint: true, untrustedContentHint: true },
       execute: (request) => options.agent.query({ resourceId: resource.id, ...request }),
       },
-    })),
+    }));
+
+  const describeBrokeredQueryTools = () => [{
+    key: "site.find_queries",
+    definition: {
+      name: "site.find_queries",
+      title: "Find site information sources",
+      description: "Find the authorized Site Agent query resources most relevant to an information need before reading frontend, backend, or document-backed data.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          text: { type: "string", maxLength: 500 },
+          execution: { type: "string", enum: ["local", "host"] },
+          mode: { type: "string" },
+          limit: { type: "integer", minimum: 1, maximum: 50 },
+        },
+        additionalProperties: false,
+      },
+      annotations: { readOnlyHint: true, untrustedContentHint: true },
+      execute: (request) => options.agent.findQueryResources(request),
+    },
+  }, {
+    key: "site.query",
+    definition: {
+      name: "site.query",
+      title: "Query site information",
+      description: "Read one authorized Site Agent resource selected with site.find_queries. Results include opaque references and exact semantic destinations when the source can be revealed in the site.",
+      inputSchema: {
+        type: "object",
+        required: ["resourceId"],
+        properties: {
+          resourceId: { type: "string" },
+          mode: { type: "string" },
+          filters: { type: "object" },
+          sort: { type: "string" },
+          limit: { type: "integer", minimum: 1, maximum: 1000 },
+          cursor: { type: "string" },
+        },
+        additionalProperties: false,
+      },
+      annotations: { readOnlyHint: true, untrustedContentHint: true },
+      execute: (request) => options.agent.query(request),
+    },
+  }];
+
+  const describeTools = (manifest) => [
+    ...(options.queryExposure === "brokered"
+      || (!options.queryExposure && manifest.queryResources.length > Number(options.maxExpandedQueryTools || 24))
+      ? describeBrokeredQueryTools()
+      : describeExpandedQueryTools(manifest)),
     ...manifest.actions.filter(({ status }) => status !== "sunset").map((action) => ({
       key: `prepare.${action.id}`,
       definition: {
