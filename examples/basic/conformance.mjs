@@ -190,16 +190,36 @@ export default function createConformanceTarget(manifest) {
       },
       denial: { method: "query", request: { resourceId: "orders" } },
       coverage: {
-        verify: ({ manifest: currentManifest }) => ({
-          source: "host-inventory",
-          inventoryDigest: "a".repeat(64),
-          dimensions: [
-            { kind: "query", discovered: currentManifest.queryResources.length, covered: currentManifest.queryResources.length, exempted: 0, unresolved: 0 },
-            { kind: "navigation", discovered: currentManifest.navigationDestinations.length, covered: currentManifest.navigationDestinations.length, exempted: 0, unresolved: 0 },
-            { kind: "action", discovered: currentManifest.actions.length, covered: currentManifest.actions.length, exempted: 0, unresolved: 0 },
-          ],
-          exemptions: [],
-        }),
+        verify: ({ manifest: currentManifest }) => {
+          let sequence = 0;
+          const inventory = [
+            ["query", "queryable", currentManifest.queryResources],
+            ["navigation", "navigable", currentManifest.navigationDestinations],
+            ["action", "executable", currentManifest.actions],
+          ];
+          return {
+            source: "host-inventory",
+            evidenceVersion: 2,
+            inventoryBasis: "independent-user-surface",
+            inventoryMethod: "rendered-state-crawl",
+            stateCoverage: { discovered: 1, exercised: 1, viewports: ["desktop", "mobile-touch"] },
+            inventoryDigest: "a".repeat(64),
+            dimensions: inventory.map(([kind, , capabilities]) => ({
+              kind,
+              discovered: capabilities.length,
+              covered: capabilities.length,
+              exempted: 0,
+              unresolved: 0,
+            })),
+            items: inventory.flatMap(([kind, disposition, capabilities]) => capabilities.map(({ id }) => ({
+              kind,
+              disposition,
+              capabilityId: id,
+              actorClass: "authorized-user",
+              identifierHash: (++sequence).toString(16).padStart(64, "0"),
+            }))),
+          };
+        },
       },
       operability: {
         verify: ({ manifest: currentManifest }) => ({

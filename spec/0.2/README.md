@@ -195,12 +195,30 @@ Transports MAY project this structure into their native error format.
 
 ## Coverage evidence
 
-A complete coverage claim MUST be backed by executable evidence generated from
-an independent host inventory, not by recounting the manifest. Evidence records
-a stable inventory digest and separate Query, Navigation, and Action dimensions
-with discovered, covered, reviewed-exempt, and unresolved counts. Every reviewed
-exemption uses a hashed source identifier and a reason. Complete conformance
-requires zero unresolved inventory entries.
+A complete coverage claim MUST be backed by executable, itemized evidence
+generated from an independent inventory of the user-visible and user-invokable
+surface, not by recounting the manifest or backend handler registry. Each item
+identifies its actor class and a privacy-safe stable source hash. Query items
+count as covered only when queryable, Navigation items only when navigable, and
+Action items only when executable; being able to describe or navigate to an
+Action does not make that Action covered.
+
+A complete claim additionally requires a real rendered-state crawl across every
+declared workflow state at desktop and mobile-touch viewports. Static source
+inspection may support a partial inventory, but it cannot observe conditional,
+template-instantiated, permission-dependent, or runtime-created controls and
+therefore cannot prove completeness by itself.
+
+Every discovered item MUST be classified as covered, reviewed-restricted, or
+unresolved. `visibleSurfaces: complete` requires zero unresolved Query or
+Navigation items independently; `humanActions: complete` requires zero
+unresolved Action items independently. A restriction is valid only for a legal, security, privacy,
+provider, human-judgment, or physical-presence boundary, and records its policy
+authority, reviewing role, review time, and concrete reason. Missing adapters,
+technical debt, UI-only implementations, and implementation inconvenience are
+unresolved—not exemptions. Complete conformance requires zero unresolved items
+for every actor class. This is 100% capability accountability: every safely
+automatable Action is executable and every genuine exception is explicit.
 
 ## Bindings
 

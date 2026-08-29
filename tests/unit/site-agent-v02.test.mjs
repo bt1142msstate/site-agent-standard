@@ -691,18 +691,155 @@ test("cancellation and deadlines stop before host adapters and return structured
 
 test("complete coverage claims require independent resolved inventory evidence", () => {
   const manifest = example();
+  let sequence = 0;
+  const inventory = [
+    ["query", "queryable", manifest.queryResources],
+    ["navigation", "navigable", manifest.navigationDestinations],
+    ["action", "executable", manifest.actions],
+  ];
   const evidence = {
     source: "host-inventory",
+    evidenceVersion: 2,
+    inventoryBasis: "independent-user-surface",
+    inventoryMethod: "rendered-state-crawl",
+    stateCoverage: { discovered: 1, exercised: 1, viewports: ["desktop", "mobile-touch"] },
     inventoryDigest: "b".repeat(64),
-    dimensions: [
-      { kind: "query", discovered: 1, covered: 1, exempted: 0, unresolved: 0 },
-      { kind: "navigation", discovered: 1, covered: 1, exempted: 0, unresolved: 0 },
-      { kind: "action", discovered: 1, covered: 1, exempted: 0, unresolved: 0 },
-    ],
-    exemptions: [],
+    dimensions: inventory.map(([kind, , capabilities]) => ({
+      kind,
+      discovered: capabilities.length,
+      covered: capabilities.length,
+      exempted: 0,
+      unresolved: 0,
+    })),
+    items: inventory.flatMap(([kind, disposition, capabilities]) => capabilities.map(({ id }) => ({
+      kind,
+      disposition,
+      capabilityId: id,
+      actorClass: "authorized-user",
+      identifierHash: (++sequence).toString(16).padStart(64, "0"),
+    }))),
   };
   assert.equal(validateCoverageEvidence(manifest, evidence).valid, true);
-  evidence.dimensions[2] = { kind: "action", discovered: 2, covered: 1, exempted: 0, unresolved: 1 };
+  evidence.items.find(({ kind }) => kind === "action").disposition = "navigable";
+  evidence.dimensions[2] = {
+    ...evidence.dimensions[2],
+    covered: evidence.dimensions[2].covered - 1,
+    unresolved: 1,
+  };
+  assert.match(
+    validateCoverageEvidence(manifest, evidence).errors.join("\n"),
+    /coverage-complete-claim-has-unresolved:action/,
+  );
+});
+
+test("complete action coverage rejects navigation-only mappings and unreviewed restrictions", () => {
+  const manifest = example();
+  const action = manifest.actions[0];
+  const base = {
+    source: "host-inventory",
+    evidenceVersion: 2,
+    inventoryBasis: "independent-user-surface",
+    inventoryMethod: "rendered-state-crawl",
+    stateCoverage: { discovered: 1, exercised: 1, viewports: ["desktop", "mobile-touch"] },
+    inventoryDigest: "c".repeat(64),
+    dimensions: [
+      { kind: "query", discovered: 0, covered: 0, exempted: 0, unresolved: 0 },
+      { kind: "navigation", discovered: 0, covered: 0, exempted: 0, unresolved: 0 },
+      { kind: "action", discovered: 1, covered: 0, exempted: 0, unresolved: 1 },
+    ],
+    items: [{
+      kind: "action",
+      identifierHash: "d".repeat(64),
+      actorClass: "owner",
+      disposition: "navigable",
+      capabilityId: action.id,
+    }],
+  };
+  assert.match(validateCoverageEvidence(manifest, base).errors.join("\n"), /coverage-complete-claim-has-unresolved:action/);
+
+  const restricted = structuredClone(base);
+  restricted.dimensions[2] = { kind: "action", discovered: 1, covered: 0, exempted: 1, unresolved: 0 };
+  restricted.items[0] = {
+    ...restricted.items[0],
+    disposition: "restricted",
+    restriction: { category: "technical-debt", reason: "No adapter exists yet." },
+  };
+  const errors = validateCoverageEvidence(manifest, restricted).errors.join("\n");
+  assert.match(errors, /coverage-restriction-category-invalid/);
+  assert.match(errors, /coverage-restriction-authority-required/);
+  assert.match(errors, /coverage-restriction-reviewer-required/);
+});
+
+test("reviewed non-automatable actions remain fully accounted for", () => {
+  const manifest = example();
+  const evidence = {
+    source: "host-inventory",
+    evidenceVersion: 2,
+    inventoryBasis: "independent-user-surface",
+    inventoryMethod: "rendered-state-crawl",
+    stateCoverage: { discovered: 1, exercised: 1, viewports: ["desktop", "mobile-touch"] },
+    inventoryDigest: "e".repeat(64),
+    dimensions: [
+      { kind: "query", discovered: 0, covered: 0, exempted: 0, unresolved: 0 },
+      { kind: "navigation", discovered: 0, covered: 0, exempted: 0, unresolved: 0 },
+      { kind: "action", discovered: 1, covered: 0, exempted: 1, unresolved: 0 },
+    ],
+    items: [{
+      kind: "action",
+      identifierHash: "f".repeat(64),
+      actorClass: "authorized-user",
+      disposition: "restricted",
+      restriction: {
+        category: "physical-presence",
+        reason: "The operator must physically inspect the item before approval.",
+        authority: "center-safety-policy",
+        reviewedByRole: "safety-owner",
+        reviewedAt: "2026-08-29T00:00:00.000Z",
+      },
+    }],
+  };
+  const result = validateCoverageEvidence(manifest, evidence);
+  assert.equal(result.valid, true);
+  assert.equal(result.accountability.complete, true);
+});
+
+test("visible-surface and human-action completeness claims fail independently", () => {
+  const manifest = example();
+  manifest.conformance.coverage.humanActions = "partial";
+  const evidence = {
+    source: "host-inventory",
+    evidenceVersion: 2,
+    inventoryBasis: "independent-user-surface",
+    inventoryMethod: "rendered-state-crawl",
+    stateCoverage: { discovered: 1, exercised: 1, viewports: ["desktop", "mobile-touch"] },
+    inventoryDigest: "9".repeat(64),
+    dimensions: [
+      { kind: "query", discovered: 0, covered: 0, exempted: 0, unresolved: 0 },
+      { kind: "navigation", discovered: 1, covered: 0, exempted: 0, unresolved: 1 },
+      { kind: "action", discovered: 0, covered: 0, exempted: 0, unresolved: 0 },
+    ],
+    items: [{
+      kind: "navigation",
+      identifierHash: "8".repeat(64),
+      actorClass: "authorized-user",
+      disposition: "unresolved",
+    }],
+  };
+  assert.match(
+    validateCoverageEvidence(manifest, evidence).errors.join("\n"),
+    /coverage-complete-claim-has-unresolved:navigation/,
+  );
+
+  manifest.conformance.coverage.visibleSurfaces = "partial";
+  manifest.conformance.coverage.humanActions = "complete";
+  evidence.dimensions[1] = { kind: "navigation", discovered: 0, covered: 0, exempted: 0, unresolved: 0 };
+  evidence.dimensions[2] = { kind: "action", discovered: 1, covered: 0, exempted: 0, unresolved: 1 };
+  evidence.items[0] = {
+    kind: "action",
+    identifierHash: "7".repeat(64),
+    actorClass: "authorized-user",
+    disposition: "unresolved",
+  };
   assert.match(
     validateCoverageEvidence(manifest, evidence).errors.join("\n"),
     /coverage-complete-claim-has-unresolved:action/,

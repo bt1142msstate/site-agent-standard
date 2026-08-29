@@ -69,9 +69,15 @@ The CLI MUST NOT report full conformance without an executable adapter.
     prove the host adapter was not called and the structured problem reports no
     partial effects. Hosts additionally test cooperative cancellation around
     their own irreversible boundaries.
-18. Generate Query, Navigation, and Action coverage evidence from independent
-    host inventories. Validate counts, stable digest, reviewed exemptions, and
-    zero unresolved entries for complete claims.
+18. Generate Query, Navigation, and Action coverage evidence from an independent
+    inventory of user-visible controls, invokable workflows, and their actor
+    classes. Validate every privacy-safe item hash, exact capability mapping,
+    dimension-appropriate disposition, aggregate count, stable digest, reviewed
+    restriction authority, and zero unresolved entries for complete claims.
+    Query-only or Navigation-only support for a human Action MUST fail Action
+    coverage. Missing adapters and implementation debt MUST NOT be exempted.
+    Complete claims MUST crawl every declared rendered state at desktop and
+    mobile-touch sizes; static source scanning alone is insufficient.
 19. When Operability is claimed, prove every active destination at each declared
     desktop and mobile/touch viewport with exact state, visibility, full reveal
     depth, keyboard reachability, visible and unobscured focus, no keyboard

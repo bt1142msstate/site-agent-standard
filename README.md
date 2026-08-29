@@ -26,7 +26,7 @@ and the battle-tested Site Navigator engine as the Navigation implementation.
 ## Install
 
 ```bash
-npm install github:bt1142msstate/site-agent-standard#v0.15.0
+npm install github:bt1142msstate/site-agent-standard#v0.18.0
 ```
 
 ```js
@@ -120,6 +120,16 @@ postconditions, truthful partial-failure reporting, terminal-state stability,
 latency, and request cost. Compound mutations are resumable sequences: each
 side-effecting step is independently reauthorized, reconciled, confirmed, and
 verified; approval never spills into the next step.
+
+Version `0.18.0` makes human-to-agent capability accountability itemized and
+actor-aware. Complete claims require an independently discovered user-surface
+inventory in which every Query, Navigation, and Action is respectively
+queryable, navigable, executable, or backed by a reviewed non-automation
+restriction. Navigation-only or query-only support no longer counts as Action
+coverage, aggregate manifest recounts cannot prove completeness, and missing
+semantic adapters remain visible as unresolved gaps. Complete claims require a
+rendered-state crawl at desktop and mobile-touch; static source inventories are
+accepted only as partial evidence.
 
 ```json
 {
@@ -356,13 +366,18 @@ target is not covered.
 ```bash
 site-agent validate ./site-agent.json
 site-agent test ./site-agent.json --adapter ./site-agent.conformance.mjs
+site-agent test ./site-agent.json --adapter ./site-agent.conformance.mjs --allow-partial-coverage
 npm run check
 ```
 
 `validate` checks structure. `test` only reports full conformance after the host
 adapter executes Query, Navigation, Action, denial, reconciliation, lifecycle,
-cancellation, and independent inventory proofs. A manifest's coverage
-declaration is not accepted as test evidence.
+cancellation, and independent itemized user-surface inventory proofs. A
+manifest's coverage declaration or a recount of its own capability arrays is
+not accepted as test evidence.
+`--allow-partial-coverage` keeps executable proofs running for a host that
+honestly declares incomplete coverage; it never reports that host as fully
+conformant. Release gates seeking the complete claim MUST omit that flag.
 
 The browser suite runs deliberately difficult synthetic layouts at desktop,
 tablet-touch, and mobile-touch sizes. A conforming host should additionally

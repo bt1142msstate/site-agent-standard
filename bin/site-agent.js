@@ -10,7 +10,7 @@ import {
 import { runSiteAgentConformance } from "../src/conformance.js";
 
 function usage() {
-  console.log("Usage: site-agent <validate|test> <manifest.json> [--adapter ./conformance.mjs] [--json]");
+  console.log("Usage: site-agent <validate|test> <manifest.json> [--adapter ./conformance.mjs] [--allow-partial-coverage] [--json]");
 }
 
 function readManifest(fileName) {
@@ -52,10 +52,14 @@ async function main() {
   } else {
     result = validateSiteAgentManifest(loaded.manifest);
   }
+  const partialCoverageAccepted = command === "test"
+    && rest.includes("--allow-partial-coverage")
+    && result.valid
+    && result.executionVerified;
   if (rest.includes("--json")) console.log(JSON.stringify({ file: loaded.absolute, ...result }, null, 2));
-  else if (result.valid && (command !== "test" || result.fullyConformant)) {
+  else if (result.valid && (command !== "test" || result.fullyConformant || partialCoverageAccepted)) {
     const suffix = command === "test"
-      ? `; profiles ${Object.entries(result.profiles).filter(([, enabled]) => enabled).map(([profile]) => profile).join(", ")}; executable proofs ${result.proofs?.length || 0}; fully conformant yes`
+      ? `; profiles ${Object.entries(result.profiles).filter(([, enabled]) => enabled).map(([profile]) => profile).join(", ")}; executable proofs ${result.proofs?.length || 0}; fully conformant ${result.fullyConformant ? "yes" : "no (coverage claim is partial)"}`
       : "";
     console.log(`Site Agent manifest is valid${suffix}.`);
   } else {
