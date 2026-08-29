@@ -74,6 +74,8 @@ The CLI MUST NOT report full conformance without an executable adapter.
     classes. Validate every privacy-safe item hash, exact capability mapping,
     dimension-appropriate disposition, aggregate count, stable digest, reviewed
     restriction authority, and zero unresolved entries for complete claims.
+    Complete human-Action claims MUST also contain zero restricted Actions;
+    sensitive data alone never reduces same-authority parity.
     Query-only or Navigation-only support for a human Action MUST fail Action
     coverage. Missing adapters and implementation debt MUST NOT be exempted.
     Complete claims MUST crawl every declared rendered state at desktop and

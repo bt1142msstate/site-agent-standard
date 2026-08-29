@@ -770,7 +770,7 @@ test("complete action coverage rejects navigation-only mappings and unreviewed r
   assert.match(errors, /coverage-restriction-reviewer-required/);
 });
 
-test("reviewed non-automatable actions remain fully accounted for", () => {
+test("reviewed restrictions cannot satisfy complete same-authority Action parity", () => {
   const manifest = example();
   const evidence = {
     source: "host-inventory",
@@ -799,8 +799,10 @@ test("reviewed non-automatable actions remain fully accounted for", () => {
     }],
   };
   const result = validateCoverageEvidence(manifest, evidence);
-  assert.equal(result.valid, true);
-  assert.equal(result.accountability.complete, true);
+  assert.equal(result.valid, false);
+  assert.match(result.errors.join("\n"), /coverage-complete-action-parity-disallows-restrictions/);
+  manifest.conformance.coverage.humanActions = "partial";
+  assert.equal(validateCoverageEvidence(manifest, evidence).valid, true);
 });
 
 test("visible-surface and human-action completeness claims fail independently", () => {

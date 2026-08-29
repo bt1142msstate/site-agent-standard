@@ -212,13 +212,14 @@ therefore cannot prove completeness by itself.
 Every discovered item MUST be classified as covered, reviewed-restricted, or
 unresolved. `visibleSurfaces: complete` requires zero unresolved Query or
 Navigation items independently; `humanActions: complete` requires zero
-unresolved Action items independently. A restriction is valid only for a legal, security, privacy,
+unresolved or restricted Action items independently. A restriction is valid only for partial evidence covering a legal, security, privacy,
 provider, human-judgment, or physical-presence boundary, and records its policy
 authority, reviewing role, review time, and concrete reason. Missing adapters,
 technical debt, UI-only implementations, and implementation inconvenience are
 unresolved—not exemptions. Complete conformance requires zero unresolved items
-for every actor class. This is 100% capability accountability: every safely
-automatable Action is executable and every genuine exception is explicit.
+for every actor class. This is 100% same-authority capability parity: every
+Action available to the actor is executable through the same authorization,
+confirmation, live-proof, and audit boundary.
 
 ## Bindings
 

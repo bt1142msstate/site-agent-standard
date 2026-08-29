@@ -121,11 +121,12 @@ latency, and request cost. Compound mutations are resumable sequences: each
 side-effecting step is independently reauthorized, reconciled, confirmed, and
 verified; approval never spills into the next step.
 
-Version `0.18.0` makes human-to-agent capability accountability itemized and
+Version `0.19.0` makes human-to-agent capability accountability itemized and
 actor-aware. Complete claims require an independently discovered user-surface
 inventory in which every Query, Navigation, and Action is respectively
-queryable, navigable, executable, or backed by a reviewed non-automation
-restriction. Navigation-only or query-only support no longer counts as Action
+queryable, navigable, or executable under the same actor authority. A reviewed
+restriction may document partial coverage, but cannot satisfy complete human
+Action parity. Navigation-only or query-only support no longer counts as Action
 coverage, aggregate manifest recounts cannot prove completeness, and missing
 semantic adapters remain visible as unresolved gaps. Complete claims require a
 rendered-state crawl at desktop and mobile-touch; static source inventories are

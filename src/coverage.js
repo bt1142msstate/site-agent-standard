@@ -170,6 +170,9 @@ export function validateCoverageEvidence(manifest, evidence = {}) {
   if (claimsHumanActionsComplete && (byKind.get("action")?.unresolved ?? 1) !== 0) {
     errors.push("coverage-complete-claim-has-unresolved:action");
   }
+  if (claimsHumanActionsComplete && (byKind.get("action")?.exempted ?? 1) !== 0) {
+    errors.push("coverage-complete-action-parity-disallows-restrictions");
+  }
   return Object.freeze({
     valid: errors.length === 0,
     errors: Object.freeze(errors),
