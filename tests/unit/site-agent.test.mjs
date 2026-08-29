@@ -99,6 +99,25 @@ test("public discovery removes authenticated capabilities and implementation ext
   assert.equal(validateSiteAgentManifest(publicManifest, { publicDocument: true }).valid, true);
 });
 
+test("multi-need capability discovery is permission filtered across query, navigation, and action", async () => {
+  const agent = createSiteAgent({
+    manifest: manifest(),
+    context: { authenticated: true, permissions: ["records.view"] },
+    adapters: {},
+  });
+  const result = await agent.findCapabilities({
+    needs: [
+      { key: "find", text: "test records" },
+      { key: "open", text: "open requested record" },
+      { key: "archive", text: "archive record" },
+    ],
+  });
+  assert.equal(result.needs[0].capabilities.some(({ kind }) => kind === "query"), true);
+  assert.equal(result.needs[1].capabilities.some(({ kind }) => kind === "navigation"), true);
+  assert.equal(result.needs[2].capabilities.some(({ kind }) => kind === "action"), false);
+  assert.equal(JSON.stringify(result).includes("records.manage"), false);
+});
+
 test("executes query, exact navigation, action confirmation, and duplicate protection", async () => {
   const telemetry = [];
   const value = manifest();

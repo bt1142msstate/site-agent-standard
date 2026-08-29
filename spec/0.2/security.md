@@ -71,3 +71,8 @@
 22. Operability evidence MUST exclude record contents, opaque references,
     personal data, prompts, selectors, and credentials. A numeric score or
     automated rule set MUST NOT be represented as WCAG conformance.
+23. Compound workflows MUST preserve declared dependencies and least privilege
+    at every step. Approval for one step MUST NOT authorize another step;
+    credentials and stale authorization MUST NOT carry across steps. Hosts MUST
+    stop dependent work after denial, cancellation, or failure and accurately
+    report completed, pending, failed, and partially effective steps.
