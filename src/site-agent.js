@@ -8,6 +8,7 @@ import { assertSchemaValue } from "./schema-validation.js";
 import { createPresentationController } from "./presentation.js";
 import { createExecutionContext } from "./execution.js";
 import { SiteAgentProblem, toSiteAgentProblem } from "./problem.js";
+import { runNavigationReveal } from "./navigation-reveal.js";
 
 export * from "./manifest.js";
 export * from "./site-navigator.js";
@@ -21,9 +22,61 @@ export * from "./tutorial-runtime.js";
 export * from "./problem.js";
 export * from "./execution.js";
 export * from "./coverage.js";
+export * from "./navigation-reveal.js";
+export * from "./operability.js";
 
 function now() {
   return Date.now();
+}
+
+function normalizeSearchText(value) {
+  return String(value || "").normalize("NFKD").toLocaleLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+}
+
+function searchTokens(value) {
+  return [...new Set(normalizeSearchText(value).split(/\s+/).filter((token) => token.length > 1))];
+}
+
+function queryResourceScore(resource, text) {
+  const normalized = normalizeSearchText(text);
+  if (!normalized) return 1;
+  const tokens = searchTokens(normalized);
+  const fields = [
+    [resource.id, 12],
+    [resource.title, 10],
+    [(resource.aliases || []).join(" "), 9],
+    [(resource.keywords || []).join(" "), 7],
+    [Object.keys(resource.filters || {}).join(" "), 6],
+    [(resource.examples || []).join(" "), 5],
+    [resource.description, 3],
+    [(resource.modes || []).join(" "), 2],
+  ].map(([value, weight]) => [normalizeSearchText(value), weight]);
+  let score = 0;
+  for (const [value, weight] of fields) {
+    if (!value) continue;
+    if (value === normalized) score += weight * 4;
+    else if (value.includes(normalized)) score += weight * 2;
+    for (const token of tokens) {
+      if (value.split(" ").includes(token)) score += weight;
+      else if (value.includes(token)) score += weight * 0.4;
+    }
+  }
+  return Math.round(score * 100) / 100;
+}
+
+function describeQueryResource(resource, score) {
+  return Object.freeze({
+    resourceId: resource.id,
+    title: resource.title || resource.id,
+    description: resource.description,
+    execution: resource.execution,
+    modes: Object.freeze([...(resource.modes || [])]),
+    filters: Object.freeze(Object.keys(resource.filters || {})),
+    sorts: Object.freeze([...(resource.sorts || [])]),
+    freshness: resource.freshness ? Object.freeze({ ...resource.freshness }) : null,
+    destinationId: resource.destinationId || null,
+    score,
+  });
 }
 
 function requiredAdapter(adapter, profile) {
@@ -188,7 +241,7 @@ export function createSiteAgent(options = {}) {
     });
   }
 
-  return Object.freeze({
+  const api = {
     manifest,
     presentation,
     getConformance: () => getSiteAgentConformance(manifest),
@@ -200,6 +253,28 @@ export function createSiteAgent(options = {}) {
     subscribeCapabilitySnapshots,
     async subscribeCapabilities(listener) {
       return subscribeCapabilitySnapshots(({ manifest: currentManifest }) => listener(currentManifest));
+    },
+    async findQueryResources(request = {}) {
+      return invoke("query", "query-catalog", request, async () => {
+        const currentManifest = await getManifest();
+        const filtered = filterSiteAgentManifest(currentManifest, await getContext(), { stripExtensions: true });
+        const text = String(request.text || "").slice(0, 500);
+        const maximum = Math.min(Math.max(Number(request.limit || 8), 1), 50);
+        const resources = filtered.queryResources
+          .filter(({ status }) => status !== "sunset")
+          .filter((resource) => !request.execution || resource.execution === request.execution)
+          .filter((resource) => !request.mode || resource.modes.includes(request.mode))
+          .map((resource) => ({ resource, score: queryResourceScore(resource, text) }))
+          .filter(({ score }) => !text.trim() || score > 0)
+          .sort((left, right) => right.score - left.score
+            || left.resource.id.localeCompare(right.resource.id));
+        return Object.freeze({
+          text,
+          total: resources.length,
+          resources: Object.freeze(resources.slice(0, maximum)
+            .map(({ resource, score }) => describeQueryResource(resource, score))),
+        });
+      });
     },
     async query(request = {}) {
       return invoke("query", request.resourceId, request, async (execution) => {
@@ -229,10 +304,15 @@ export function createSiteAgent(options = {}) {
         if (resource.resultSchema) assertSchemaValue(resource.resultSchema, raw, "query-result");
         const items = Array.isArray(raw?.items) ? raw.items.map((item) => {
           if (!item || typeof item.reference !== "string" || !item.reference.trim()) throw new Error("invalid-query-result-reference");
+          const declaredDestination = resource.destinationId
+            ? currentManifest.navigationDestinations.find(({ id }) => id === resource.destinationId)
+            : null;
+          const inferredTargetKind = resource.resultTargetKind
+            || (declaredDestination?.targetKinds?.length === 1 ? declaredDestination.targetKinds[0] : null);
           const destination = validateSemanticDestination(item.destination || (resource.destinationId ? {
             destinationId: resource.destinationId,
             state: item.destinationState || {},
-            target: { reference: item.reference },
+            target: { reference: item.reference, ...(inferredTargetKind ? { kind: inferredTargetKind } : {}) },
           } : null), currentManifest);
           if (resource.materialization?.nestedDestination === "exact-reveal-required") {
             const declaration = findCapability(currentManifest.navigationDestinations, destination?.destinationId, "navigation");
@@ -256,6 +336,43 @@ export function createSiteAgent(options = {}) {
           nextCursor: pagination.style === "cursor" && typeof raw?.nextCursor === "string" ? raw.nextCursor : null,
           asOf: typeof raw?.asOf === "string" ? raw.asOf : null,
         };
+      });
+    },
+    async queryBatch(request = {}) {
+      const requests = Array.isArray(request.requests) ? request.requests : [];
+      if (!requests.length) throw new TypeError("query-batch-requests-required");
+      if (requests.length > 20) throw new TypeError("query-batch-too-large");
+      const concurrency = Math.min(Math.max(Number(request.concurrency || 4), 1), 8);
+      const results = new Array(requests.length);
+      let cursor = 0;
+      let firstFailure = null;
+      const worker = async () => {
+        while (cursor < requests.length && !(request.failFast && firstFailure)) {
+          const index = cursor;
+          cursor += 1;
+          const child = requests[index] || {};
+          try {
+            results[index] = Object.freeze({
+              resourceId: String(child.resourceId || ""),
+              status: "succeeded",
+              result: await api.query(child),
+            });
+          } catch (error) {
+            const problem = toSiteAgentProblem(error, { correlationId: child.correlationId });
+            results[index] = Object.freeze({
+              resourceId: String(child.resourceId || ""),
+              status: "failed",
+              problem,
+            });
+            firstFailure ||= problem;
+          }
+        }
+      };
+      await Promise.all(Array.from({ length: Math.min(concurrency, requests.length) }, worker));
+      if (request.failFast && firstFailure) throw firstFailure;
+      return Object.freeze({
+        status: results.some(({ status }) => status === "failed") ? "partial" : "succeeded",
+        results: Object.freeze(results.filter(Boolean)),
       });
     },
     async subscribe(request = {}, listener) {
@@ -292,9 +409,16 @@ export function createSiteAgent(options = {}) {
         validateSemanticDestination(intent, currentManifest);
         assertNestedRevealIntent(intent, destination);
         if (destination.stateSchema) assertSchemaValue(destination.stateSchema, intent.state || {}, "navigation-state");
-        const adapter = requiredAdapter(adapters.navigation?.navigate || adapters.navigation, "navigation");
+        const adapter = adapters.navigation;
         execution.assertActive();
-        const outcome = await adapter({ context, destination, execution, intent });
+        let outcome;
+        if (destination.reveal?.mode === "nested" && adapter && typeof adapter !== "function"
+          && typeof adapter.navigate !== "function") {
+          outcome = await runNavigationReveal({ adapter, context, destination, execution, intent });
+        } else {
+          const navigate = requiredAdapter(adapter?.navigate || adapter, "navigation");
+          outcome = await navigate({ context, destination, execution, intent });
+        }
         if (!outcome || outcome.exact !== true || outcome.visible !== true) throw new Error("navigation-target-not-verified");
         assertNestedRevealOutcome(outcome, intent, destination);
         return outcome;
@@ -430,5 +554,6 @@ export function createSiteAgent(options = {}) {
         throw new Error("action-task-cancel-failed");
       });
     },
-  });
+  };
+  return Object.freeze(api);
 }

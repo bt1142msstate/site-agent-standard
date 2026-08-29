@@ -1,5 +1,24 @@
 const { test, expect } = require("@playwright/test");
 
+test("the reusable adversarial fixture is keyboard operable through every nested layer", async ({ page }) => {
+  await page.goto("/examples/adversarial/");
+  await page.getByRole("tab", { name: "Overview" }).focus();
+  await page.keyboard.press("ArrowRight");
+  await expect(page.getByRole("tab", { name: "Billing" })).toHaveAttribute("aria-selected", "true");
+  await page.getByRole("button", { name: "Open family workspace" }).click();
+  await expect(page.getByRole("dialog", { name: "Family workspace" })).toBeVisible();
+  await page.getByText("Invoice history", { exact: true }).click();
+  await page.locator("#invoice-record").scrollIntoViewIfNeeded();
+  await page.getByRole("button", { name: "Load payment proof" }).click();
+  const proof = page.locator("#shadow-host").locator("iframe").contentFrame().getByRole("button", { name: "Verified payment proof" });
+  await expect(proof).toBeVisible();
+  await proof.focus();
+  await expect(proof).toBeFocused();
+  await page.getByRole("button", { name: "Close" }).click();
+  await page.getByLabel("Find a query capability").fill("invoice history");
+  await expect(page.getByRole("status")).toContainText("billing.invoice-history");
+});
+
 test("computed-style quality catches vanished visible labels and low contrast", async ({ page }) => {
   await page.goto("/examples/basic/");
   await page.setContent(`
@@ -36,6 +55,34 @@ test("computed-style quality catches vanished visible labels and low contrast", 
   expect(evidence.state.source).toBe("browser-computed-style");
   expect(evidence.state.labelsChecked).toBe(1);
   expect(evidence.state.textContrastChecks).toBeGreaterThan(0);
+});
+
+test("operability evidence catches unnamed, unreachable, obscured, and undersized targets", async ({ page }) => {
+  await page.goto("/examples/basic/");
+  await page.setContent(`
+    <style>
+      body { margin: 0; padding: 80px 24px; }
+      .good { width: 160px; height: 48px; outline: 3px solid #1684b3; }
+      .bad { width: 12px; height: 12px; outline: none; }
+    </style>
+    <button class="good">Open billing</button>
+    <div aria-hidden="true"><span class="bad"></span></div>
+  `);
+  const evidence = await page.evaluate(async () => {
+    const { auditOperableTarget } = await import("/src/rendered-quality.js");
+    return {
+      good: auditOperableTarget(document.querySelector(".good")),
+      bad: auditOperableTarget(document.querySelector(".bad")),
+    };
+  });
+  expect(evidence.good.violations).toEqual([]);
+  expect(evidence.good.keyboardReachable).toBe(true);
+  expect(evidence.bad.violations).toEqual(expect.arrayContaining([
+    "accessible-name-missing",
+    "keyboard-unreachable",
+    "focus-indicator-not-evidenced",
+    "target-size-below-24px",
+  ]));
 });
 
 test("renders the standard instructional pointer, exact target, and anchored ripple", async ({ page }) => {
@@ -301,6 +348,146 @@ test("uses a declared concise text target when the preferred record cannot fit",
     return rect.top >= 96 && rect.bottom <= innerHeight - 8;
   });
   expect(visible).toBe(true);
+});
+
+test("orchestrates a seven-layer tab, modal, disclosure, virtual list, shadow root, and document reveal", async ({ page }) => {
+  await page.goto("/examples/basic/");
+  await page.setContent(`
+    <style>
+      html, body { margin: 0; min-height: 1200px; font-family: system-ui; }
+      .site-header { position: fixed; inset: 0 0 auto; height: 72px; z-index: 20; background: white; }
+      main { padding: 92px 16px 120px; }
+      [hidden] { display: none !important; }
+      dialog { box-sizing: border-box; width: min(760px, calc(100vw - 24px)); height: min(680px, calc(100vh - 100px)); padding: 0; overflow: hidden; }
+      .dialog-scroll { height: 100%; overflow: auto; padding: 18px; }
+      .dialog-tools { position: sticky; top: -18px; z-index: 4; height: 64px; background: white; }
+      .before { height: 520px; }
+      .virtual-list { height: 300px; overflow: auto; border: 1px solid #ccd6df; }
+      .virtual-canvas { box-sizing: border-box; min-height: 900px; padding-top: 590px; }
+      iframe { display: block; width: 680px; max-width: calc(100vw - 90px); height: 260px; border: 0; }
+      .is-navigation-focus { outline: 4px solid #1684b3; outline-offset: 3px; }
+    </style>
+    <header class="site-header">Persistent header</header>
+    <main>
+      <div role="tablist" aria-label="Workspace">
+        <button role="tab" aria-selected="true" id="overview-tab">Overview</button>
+        <button role="tab" aria-selected="false" id="records-tab">Records</button>
+      </div>
+      <section id="overview-panel">Overview panel</section>
+      <section id="records-panel" hidden>
+        <button id="open-record">Open record</button>
+      </section>
+      <dialog id="record-dialog" aria-labelledby="dialog-title">
+        <div class="dialog-scroll">
+          <header class="dialog-tools"><h2 id="dialog-title">Nested record</h2></header>
+          <div class="before"></div>
+          <details id="advanced"><summary>Advanced documents</summary>
+            <div class="virtual-list"><div class="virtual-canvas" id="virtual-canvas"></div></div>
+          </details>
+        </div>
+      </dialog>
+    </main>
+  `);
+
+  await page.evaluate(async () => {
+    const { runNavigationReveal } = await import("/src/navigation-reveal.js");
+    const destination = {
+      targetKinds: ["document-segment"],
+      reveal: {
+        mode: "nested",
+        steps: [
+          { id: "route", kind: "route" },
+          { id: "records-tab", kind: "state" },
+          { id: "record-dialog", kind: "state" },
+          { id: "advanced-disclosure", kind: "state" },
+          { id: "virtual-record", kind: "state" },
+          { id: "embedded-document", kind: "nested-resource" },
+          { id: "source-excerpt", kind: "target" },
+        ],
+      },
+    };
+    const state = { target: null, frame: null };
+    const checks = [];
+    const adapter = {
+      activateRoute: () => { document.body.dataset.route = "records"; },
+      applyState: ({ step }) => {
+        if (step.id === "records-tab") {
+          document.querySelector("#overview-tab").setAttribute("aria-selected", "false");
+          document.querySelector("#records-tab").setAttribute("aria-selected", "true");
+          document.querySelector("#overview-panel").hidden = true;
+          document.querySelector("#records-panel").hidden = false;
+        }
+        if (step.id === "record-dialog") document.querySelector("#record-dialog").showModal();
+        if (step.id === "advanced-disclosure") document.querySelector("#advanced").open = true;
+        if (step.id === "virtual-record") setTimeout(() => {
+          const row = document.createElement("article");
+          row.id = "virtual-row";
+          document.querySelector("#virtual-canvas").append(row);
+        }, 80);
+      },
+      revealResource: () => {
+        const row = document.querySelector("#virtual-row");
+        const host = document.createElement("div");
+        host.id = "document-host";
+        row.append(host);
+        const root = host.attachShadow({ mode: "open" });
+        const frame = document.createElement("iframe");
+        frame.title = "Policy document";
+        frame.srcdoc = `<style>body{margin:0;min-height:1200px;padding:16px;font-family:system-ui}.space{height:850px}.source{display:block;width:240px;padding:16px;background:#eef8f4}</style><div class="space"></div><p class="source" tabindex="-1">Exact policy source</p>`;
+        root.append(frame);
+        state.frame = frame;
+      },
+      revealTarget: async () => {
+        const frame = state.frame;
+        if (!frame.contentDocument?.readyState || frame.contentDocument.readyState === "loading") {
+          await new Promise((resolve) => frame.addEventListener("load", resolve, { once: true }));
+        }
+        frame.scrollIntoView({ block: "center", inline: "nearest" });
+        const target = frame.contentDocument.querySelector(".source");
+        target.scrollIntoView({ block: "center" });
+        target.classList.add("is-navigation-focus");
+        target.focus({ preventScroll: true });
+        state.target = target;
+      },
+      verifyStep: ({ step }) => {
+        let verified = false;
+        if (step.id === "route") verified = document.body.dataset.route === "records";
+        if (step.id === "records-tab") verified = document.querySelector("#records-tab").getAttribute("aria-selected") === "true"
+          && !document.querySelector("#records-panel").hidden;
+        if (step.id === "record-dialog") verified = document.querySelector("#record-dialog").open;
+        if (step.id === "advanced-disclosure") verified = document.querySelector("#advanced").open;
+        if (step.id === "virtual-record") verified = Boolean(document.querySelector("#virtual-row"));
+        if (step.id === "embedded-document") verified = Boolean(state.frame?.contentDocument?.querySelector(".source"));
+        if (step.id === "source-excerpt") {
+          const targetRect = state.target?.getBoundingClientRect();
+          const frameRect = state.frame?.getBoundingClientRect();
+          verified = Boolean(targetRect && frameRect
+            && targetRect.top >= 0 && targetRect.bottom <= state.frame.contentWindow.innerHeight
+            && frameRect.top >= 0 && frameRect.bottom <= innerHeight
+            && state.frame.contentDocument.activeElement === state.target);
+        }
+        if (verified) checks.push(step.id);
+        return step.kind === "target"
+          ? { verified, exact: verified, visible: verified, targetKind: "document-segment" }
+          : { verified };
+      },
+    };
+    const startedAt = performance.now();
+    const outcome = await runNavigationReveal({ adapter, destination, intent: {}, pollIntervalMs: 20 });
+    window.adversarialOutcome = { checks, durationMs: performance.now() - startedAt, outcome };
+  });
+
+  await expect(page.locator("#records-tab")).toHaveAttribute("aria-selected", "true");
+  await expect(page.locator("#record-dialog")).toHaveAttribute("open", "");
+  await expect(page.locator("#advanced")).toHaveAttribute("open", "");
+  await expect(page.locator("#document-host")).toHaveCount(1);
+  const evidence = await page.evaluate(() => window.adversarialOutcome);
+  expect(evidence.checks).toEqual([
+    "route", "records-tab", "record-dialog", "advanced-disclosure",
+    "virtual-record", "embedded-document", "source-excerpt",
+  ]);
+  expect(evidence.outcome.reveal.complete).toBe(true);
+  expect(evidence.durationMs).toBeLessThan(3000);
 });
 
 test("chooses and reveals the smallest precise off-screen reference when the record also fits", async ({ page }) => {

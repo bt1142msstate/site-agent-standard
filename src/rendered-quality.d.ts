@@ -27,6 +27,17 @@ export declare function getContrastRatio(
 ): number;
 export declare function auditRenderedLabel(element: Element, options?: Record<string, unknown>): RenderedLabelAudit;
 export declare function auditRenderedState(options?: Record<string, unknown>): RenderedQualityObservation;
+export declare function auditOperableTarget(element: Element, options?: Record<string, unknown>): {
+  reference: string;
+  name: string;
+  role: string;
+  keyboardReachable: boolean;
+  focusNotObscured: boolean;
+  focusIndicatorEvidenced: boolean;
+  targetSize: { width: number; height: number; pass: boolean };
+  unavailable: boolean;
+  violations: readonly string[];
+};
 export declare function getRenderedQualityMatrix(manifest: Record<string, unknown>): readonly {
   mappedStateId: string;
   viewport: string;

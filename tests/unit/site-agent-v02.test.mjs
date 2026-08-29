@@ -10,6 +10,7 @@ import {
   createSiteAgent,
   negotiateSiteAgentVersion,
   registerWebMcpTools,
+  runNavigationReveal,
   runSiteAgentConformance,
   SiteAgentProblem,
   stableFingerprintPayload,
@@ -150,6 +151,7 @@ function nestedDocumentManifest() {
       nestedDestination: "exact-reveal-required",
     },
     destinationId: "public-document.excerpt",
+    resultTargetKind: "document-segment",
   });
   manifest.navigationDestinations.push({
     id: "public-document.excerpt",
@@ -225,7 +227,38 @@ test("nested document results require a complete exact reveal contract", async (
     },
   }));
   const verifiedQuery = await verifiedAgent.query({ resourceId: "public-document-text" });
+  assert.equal(verifiedQuery.items[0].destination.target.kind, "document-segment");
   assert.equal((await verifiedAgent.navigate(verifiedQuery.items[0].destination)).visible, true);
+});
+
+test("multi-kind destinations accept an allowed exact kind on each query result", async () => {
+  const manifest = nestedDocumentManifest();
+  const resource = manifest.queryResources.at(-1);
+  const destination = manifest.navigationDestinations.at(-1);
+  delete resource.resultTargetKind;
+  destination.targetKinds.push("document-image");
+  assert.deepEqual(validateSiteAgentManifest(manifest), { valid: true, errors: [] });
+  const agent = createSiteAgent({
+    manifest,
+    context: { authenticated: false, permissions: [] },
+    adapters: {
+      query: async () => ({
+        total: 1,
+        items: [{
+          reference: "opaque-image-1",
+          label: "Badge photo",
+          fields: {},
+          destination: {
+            destinationId: destination.id,
+            state: { documentPage: 1 },
+            target: { reference: "opaque-image-1", kind: "document-image" },
+          },
+        }],
+      }),
+    },
+  });
+  const result = await agent.query({ resourceId: resource.id });
+  assert.equal(result.items[0].destination.target.kind, "document-image");
 });
 
 test("0.2 rejects broken event, relationship, replacement, and workflow references", () => {
@@ -263,6 +296,96 @@ test("0.2 validates query input/output, cursor pagination, and live subscription
   assert.equal(result.nextCursor, "opaque-next");
   assert.equal((await agent.subscribe({ resourceId: "orders" }, () => {})).unsubscribe instanceof Function, true);
   await assert.rejects(agent.query({ resourceId: "orders", filters: { status: 7 } }), /query-filters-schema-invalid/);
+});
+
+test("large query catalogs are permission-filtered, discoverable, batchable, and WebMCP-brokered", async () => {
+  const manifest = example();
+  manifest.queryResources[0].aliases = ["customer purchases"];
+  manifest.queryResources[0].keywords = ["fulfillment", "status"];
+  manifest.queryResources[0].examples = ["Which orders are still open?"];
+  for (let index = 0; index < 25; index += 1) {
+    manifest.queryResources.push({
+      ...structuredClone(manifest.queryResources[0]),
+      id: `private-source-${index}`,
+      title: `Private source ${index}`,
+      description: `Authorized information source number ${index}`,
+      permissionsAll: ["orders.view"],
+    });
+  }
+  manifest.queryResources.push({
+    ...structuredClone(manifest.queryResources[0]),
+    id: "secret-source",
+    title: "Secret source",
+    description: "Restricted information that must not be discoverable",
+    permissionsAll: ["private.view"],
+  });
+  const agent = createSiteAgent({
+    manifest,
+    context: { authenticated: true, permissions: ["orders.view"] },
+    adapters: { query: async () => ({ items: [], total: 0, summary: "No matching orders" }) },
+  });
+  const discovery = await agent.findQueryResources({ text: "customer purchase status" });
+  assert.equal(discovery.resources[0].resourceId, "orders");
+  assert.equal(discovery.resources.some(({ resourceId }) => resourceId === "secret-source"), false);
+
+  const batch = await agent.queryBatch({
+    requests: [{ resourceId: "orders" }, { resourceId: "missing" }],
+  });
+  assert.equal(batch.status, "partial");
+  assert.deepEqual(batch.results.map(({ status }) => status), ["succeeded", "failed"]);
+
+  const registered = [];
+  const handle = await registerWebMcpTools({
+    document: { modelContext: { registerTool: async (tool) => registered.push(tool) } },
+    agent,
+  });
+  assert.ok(handle.registeredToolNames.includes("site.find_queries"));
+  assert.ok(handle.registeredToolNames.includes("site.query"));
+  assert.equal(handle.registeredToolNames.some((name) => name === "query.secret-source"), false);
+  const found = await registered.find(({ name }) => name === "site.find_queries").execute({ text: "orders" });
+  assert.equal(found.resources[0].resourceId, "orders");
+  handle.unregister();
+});
+
+test("nested reveal orchestration verifies every semantic layer in order and waits for virtualization", async () => {
+  const destination = {
+    targetKinds: ["document-segment"],
+    reveal: {
+      mode: "nested",
+      steps: [
+        { id: "route", kind: "route" },
+        { id: "workspace-tab", kind: "state" },
+        { id: "detail-dialog", kind: "state" },
+        { id: "advanced-disclosure", kind: "state" },
+        { id: "virtual-record", kind: "state" },
+        { id: "embedded-document", kind: "nested-resource" },
+        { id: "source", kind: "target" },
+      ],
+    },
+  };
+  const handled = [];
+  const verified = [];
+  let virtualChecks = 0;
+  const adapter = {
+    revealStep: ({ step }) => handled.push(step.id),
+    verifyStep: ({ step }) => {
+      if (step.id === "virtual-record" && virtualChecks++ === 0) return false;
+      verified.push(step.id);
+      return step.kind === "target"
+        ? { verified: true, exact: true, visible: true, targetKind: "document-segment" }
+        : { verified: true };
+    },
+  };
+  const result = await runNavigationReveal({
+    adapter,
+    destination,
+    intent: {},
+    pollIntervalMs: 1,
+    stepTimeoutMs: 200,
+  });
+  assert.deepEqual(handled, destination.reveal.steps.map(({ id }) => id));
+  assert.deepEqual(verified, destination.reveal.steps.map(({ id }) => id));
+  assert.deepEqual(result.reveal.verifiedSteps, destination.reveal.steps.map(({ id }) => id));
 });
 
 test("0.2 validates action input/output and supports durable task adapters", async () => {
@@ -382,7 +505,7 @@ test("full conformance requires and records executable host proofs", async () =>
   const result = await runSiteAgentConformance({ manifest, ...createConformanceTarget(manifest) });
   assert.equal(result.fullyConformant, true, JSON.stringify(result.errors));
   assert.equal(result.executionVerified, true);
-  assert.equal(result.proofs.length, 16);
+  assert.equal(result.proofs.length, 17);
   assert.ok(result.proofs.every(({ status }) => status === "passed"));
 });
 
@@ -416,6 +539,28 @@ test("dynamic capability revisions take effect without recreating the agent", as
   await notify();
   assert.deepEqual(observed, ["example-orders-1", "example-orders-2"]);
   await assert.rejects(agent.query({ resourceId: "orders" }), /query-capability-sunset/);
+});
+
+test("permission-filtered catalogs retain authorized navigation-only destinations", async () => {
+  const manifest = example();
+  manifest.navigationDestinations.push({
+    id: "settings.help",
+    description: "Open the exact staff help destination without requiring a query or action link",
+    visibility: "authenticated",
+    permissionsAll: ["orders.view"],
+    route: "/settings/help/",
+    precision: "surface",
+    exact: true,
+    targetKinds: ["help-surface"],
+    stateSchema: { type: "object", additionalProperties: false },
+  });
+  const agent = createSiteAgent({
+    manifest,
+    context: { authenticated: true, permissions: ["orders.view"] },
+    adapters: {},
+  });
+  const filtered = await agent.getCapabilities();
+  assert.ok(filtered.navigationDestinations.some(({ id }) => id === "settings.help"));
 });
 
 test("cancellation and deadlines stop before host adapters and return structured problems", async () => {

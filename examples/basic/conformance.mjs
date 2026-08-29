@@ -1,4 +1,4 @@
-import { createSiteAgent, runSynchronizedTutorial } from "../../src/site-agent.js";
+import { createSiteAgent, REQUIRED_ACCESSIBILITY_RULES, runSynchronizedTutorial } from "../../src/site-agent.js";
 
 export default function createConformanceTarget(manifest) {
   let planSequence = 0;
@@ -189,6 +189,60 @@ export default function createConformanceTarget(manifest) {
             { kind: "action", discovered: currentManifest.actions.length, covered: currentManifest.actions.length, exempted: 0, unresolved: 0 },
           ],
           exemptions: [],
+        }),
+      },
+      operability: {
+        verify: ({ manifest: currentManifest }) => ({
+          source: "independent-operability-run",
+          inventoryDigest: "c".repeat(64),
+          wcagConformanceClaim: "none",
+          budgets: {
+            navigationMs: currentManifest.operability.navigationBudgetMs,
+            queryMs: currentManifest.operability.queryBudgetMs,
+          },
+          scope: {
+            viewports: currentManifest.operability.viewports,
+            inputModes: currentManifest.operability.inputModes,
+          },
+          navigation: currentManifest.navigationDestinations.flatMap((destination) => (
+            currentManifest.operability.viewports.map((viewport) => ({
+              destinationId: destination.id,
+              viewport,
+              exact: true,
+              stateVerified: true,
+              targetVisible: true,
+              keyboardReachable: true,
+              focusVisible: true,
+              focusNotObscured: true,
+              noKeyboardTrap: true,
+              durationMs: 120,
+              revealDepth: destination.reveal?.steps?.length || 0,
+              violations: [],
+            }))
+          )),
+          queries: currentManifest.queryResources.map((resource) => ({
+            resourceId: resource.id,
+            execution: resource.execution,
+            authorizedCase: true,
+            deniedCase: true,
+            filtersValidated: true,
+            resultSchemaValidated: true,
+            bounded: true,
+            emptyState: true,
+            errorState: true,
+            provenanceVerified: true,
+            durationMs: 80,
+            violations: [],
+          })),
+          accessibility: {
+            assistiveTechnologyChecks: ["screen-reader-smoke"],
+            rules: REQUIRED_ACCESSIBILITY_RULES.map((id, index) => ({
+              id,
+              mode: index % 2 ? "manual" : "automated",
+              outcome: "passed",
+              requirement: `Evidence for ${id}`,
+            })),
+          },
         }),
       },
     },

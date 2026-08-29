@@ -574,3 +574,5 @@ export function createSiteNavigator(options = {}) {
 }
 
 export const createVerifiedNavigationController = createSiteNavigator;
+
+export { runNavigationReveal } from "./navigation-reveal.js";

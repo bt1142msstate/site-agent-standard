@@ -1,4 +1,4 @@
-export type SiteAgentProfile = "core" | "query" | "navigation" | "action" | "presentation";
+export type SiteAgentProfile = "core" | "query" | "navigation" | "action" | "presentation" | "operability";
 export type CapabilityVisibility = "public" | "authenticated";
 export type TargetPrecision = "control" | "field" | "record" | "record-page" | "surface";
 export type NavigationCandidatePrecision = "value" | "control" | "field" | "text" | "record" | "section" | "surface";
@@ -32,6 +32,9 @@ export interface SiteAgentCapability extends PermissionContract {
 }
 
 export interface QueryResource extends SiteAgentCapability {
+  aliases?: string[];
+  keywords?: string[];
+  examples?: string[];
   execution: "local" | "host";
   modes: string[];
   filters: Record<string, Record<string, unknown>>;
@@ -50,6 +53,7 @@ export interface QueryResource extends SiteAgentCapability {
   aggregations?: Record<string, Record<string, unknown>>;
   relationships?: string[];
   destinationId?: string;
+  resultTargetKind?: string;
 }
 
 export interface NavigationDestination extends SiteAgentCapability {
@@ -63,6 +67,8 @@ export interface NavigationDestination extends SiteAgentCapability {
     steps: Array<{
       id: string;
       kind: "route" | "state" | "nested-resource" | "target";
+      description?: string;
+      timeoutMs?: number;
       stateKeys?: string[];
       targetKinds?: string[];
     }>;
@@ -154,6 +160,16 @@ export interface SiteAgentManifest {
     muteSupported: boolean;
     reducedMotionSupported: boolean;
   };
+  operability?: {
+    evidenceSource: "independent-operability-run";
+    coverage: "all-active-capabilities";
+    viewports: string[];
+    inputModes: Array<"keyboard" | "pointer" | "touch" | "programmatic" | "assistive-technology">;
+    accessibilityRules: "act-compatible-automated-and-manual";
+    wcagConformanceClaim: false;
+    navigationBudgetMs: number;
+    queryBudgetMs: number;
+  };
   events?: SiteAgentEvent[];
   workflows?: SiteAgentWorkflow[];
   bindings?: Record<string, unknown>;
@@ -172,6 +188,7 @@ export * from "./tutorial-runtime.js";
 export * from "./problem.js";
 export * from "./execution.js";
 export * from "./coverage.js";
+export * from "./operability.js";
 
 export interface SiteAgentContext {
   authenticated: boolean;
@@ -205,6 +222,41 @@ export interface QueryRequest {
   signal?: AbortSignal;
   deadlineAt?: string | number;
   correlationId?: string;
+}
+
+export interface QueryDiscoveryRequest {
+  text?: string;
+  mode?: string;
+  execution?: "local" | "host";
+  limit?: number;
+}
+
+export interface QueryDiscoveryResult {
+  text: string;
+  total: number;
+  resources: Array<{
+    resourceId: string;
+    title: string;
+    description: string;
+    execution: "local" | "host";
+    modes: string[];
+    filters: string[];
+    sorts: string[];
+    freshness: QueryResource["freshness"];
+    destinationId: string | null;
+    score: number;
+  }>;
+}
+
+export interface QueryBatchRequest {
+  requests: QueryRequest[];
+  concurrency?: number;
+  failFast?: boolean;
+}
+
+export interface QueryBatchResult {
+  status: "succeeded" | "partial";
+  results: Array<{ resourceId: string; status: "succeeded"; result: QueryResult } | { resourceId: string; status: "failed"; problem: unknown }>;
 }
 
 export interface CapabilitySnapshot {
@@ -309,7 +361,7 @@ export declare function assertSiteAgentManifest(manifest: unknown, options?: { p
 export declare function isCapabilityAuthorized(capability: SiteAgentCapability, context: SiteAgentContext): boolean;
 export declare function filterSiteAgentManifest(manifest: SiteAgentManifest, context: SiteAgentContext, options?: { stripExtensions?: boolean }): SiteAgentManifest;
 export declare function createPublicDiscoveryManifest(manifest: SiteAgentManifest): SiteAgentManifest;
-export declare function getSiteAgentConformance(manifest: SiteAgentManifest): { valid: boolean; errors: string[]; profiles: Record<SiteAgentProfile, boolean>; coverage: Record<string, string>; declaredComplete: boolean; executionVerified: false; fullyConformant: false };
+export declare function getSiteAgentConformance(manifest: SiteAgentManifest): { valid: boolean; errors: string[]; profiles: Record<SiteAgentProfile, boolean>; coverage: Record<string, string>; declaredComplete: boolean; declaredTutorialComplete: boolean; declaredOperabilityComplete: boolean; executionVerified: false; fullyConformant: false; tutorialConformant: false; operabilityConformant: false };
 export declare function createSiteAgent(options: SiteAgentOptions): {
   manifest: SiteAgentManifest;
   getConformance(): ReturnType<typeof getSiteAgentConformance>;
@@ -318,7 +370,9 @@ export declare function createSiteAgent(options: SiteAgentOptions): {
   getCapabilitySnapshot(): Promise<CapabilitySnapshot>;
   subscribeCapabilitySnapshots(listener: (snapshot: CapabilitySnapshot) => void | Promise<void>): Promise<{ unsubscribe(): void }>;
   subscribeCapabilities(listener: (manifest: SiteAgentManifest) => void): Promise<{ unsubscribe(): void }>;
+  findQueryResources(request?: QueryDiscoveryRequest): Promise<QueryDiscoveryResult>;
   query(request: QueryRequest): Promise<QueryResult>;
+  queryBatch(request: QueryBatchRequest): Promise<QueryBatchResult>;
   subscribe(request: QueryRequest, listener: (event: unknown) => void): Promise<{ unsubscribe(): void }>;
   navigate(intent: SemanticDestination & import("./execution.js").SiteAgentExecutionRequest): Promise<unknown>;
   prepareAction(request: { actionId: string; input?: unknown; target?: unknown } & import("./execution.js").SiteAgentExecutionRequest): Promise<ActionPlan>;

@@ -17,6 +17,10 @@ Agent conformance.
 - Query tools are read-only but may return untrusted content. Action tools expose
   preparation only; confirmation and execution remain visible host-controlled
   stages using the same authoritative handler as the human interface.
+- A large Query catalog SHOULD expose permission-filtered resource discovery
+  plus one generic read tool rather than registering an unbounded tool per
+  resource. The broker MUST preserve resource schemas, limits, provenance,
+  freshness, authorization, and active revision semantics.
 - Tool registration and execution use abort signals. Unmount, sign-out, authority
   changes, navigation, and timeout release registrations and in-flight work.
 - Tool names, descriptions, parameter descriptions, and results SHOULD stay
@@ -24,6 +28,10 @@ Agent conformance.
 - Navigation adapters activate the application view, apply every semantic state
   value, wait for data, verify complete state, and resolve one exact target. The
   manifest never supplies executable selectors or arbitrary scripts.
+- Nested Navigation SHOULD use a stepwise coordinator that invokes and verifies
+  route, state, nested-resource, and exact-target handlers in declaration order.
+  A binding MUST NOT collapse a failed intermediate step into a successful
+  outer-page navigation.
 
 The Site Agent capability subscription is authoritative for registered-tool
 lifecycle. A browser `toolchange` event is useful evidence for consumers but is

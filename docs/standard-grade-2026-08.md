@@ -1,13 +1,13 @@
 # Site Agent Standard review - August 2026
 
-## Grade after v0.14.0: A (94/100)
+## Grade after v0.15.0: A (97/100)
 
 | Area | Score | Evidence |
 |---|---:|---|
 | Architecture and scope | 19/20 | Independent Query, Navigation, Action, and Presentation profiles share opaque references without becoming one privileged API. |
 | Authorization and safety | 19/20 | Caller-filtered revisions, reauthorization, schema validation, reconciliation, idempotency, consent, safe problems, and privacy-bounded telemetry are explicit. |
-| Query and completeness | 18/20 | Static materialization, dynamic host adapters, subscriptions, nested provenance, and independent inventory evidence cover both visible information and source parity. |
-| Navigation and presentation | 19/20 | Atomic state application, exact declared targets, clipping/viewport verification, nested reveal, rendered-quality evidence, and tutorial presentation are unusually complete. |
+| Query and completeness | 19/20 | Permission-filtered discovery, brokered large catalogs, bounded batch reads, static materialization, subscriptions, nested provenance, and independent inventory evidence cover frontend and backend information. |
+| Navigation and presentation | 20/20 | Stepwise semantic reveal, exact declared targets, clipping/viewport verification, pathological nested fixtures, rendered-quality evidence, and tutorial presentation form a complete reference contract. |
 | Interoperability and lifecycle | 19/20 | WebMCP registration follows live capability revisions; MCP Tasks, Apps boundaries, Arazzo, AsyncAPI, and WebDriver BiDi are clean projections rather than duplicated business logic. |
 
 The standard is stronger than any one adjacent protocol for its intended host

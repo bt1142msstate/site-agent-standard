@@ -2,6 +2,7 @@ import { createPublicDiscoveryManifest, getSiteAgentConformance } from "./manife
 import { validateTutorialArtifactAcceptanceEvidence } from "./artifact-contract.js";
 import { getRenderedQualityMatrix, validateRenderedQualityEvidence } from "./rendered-quality.js";
 import { validateCoverageEvidence } from "./coverage.js";
+import { validateSiteOperabilityEvidence } from "./operability.js";
 
 function sanitizedProof(id, profile, status, startedAt, failureCode = "") {
   return Object.freeze({
@@ -256,6 +257,16 @@ export async function runSiteAgentConformance(options = {}) {
     });
   }
 
+  if (declared.profiles.operability) {
+    await runProof(proofs, "operability.independent-evidence", "operability", async () => {
+      const testCase = requireCase(cases, "operability");
+      if (typeof testCase.verify !== "function") throw new Error("operability-verifier-required");
+      const result = validateSiteOperabilityEvidence(options.manifest, await testCase.verify({ manifest: options.manifest }));
+      if (!result.valid) throw new Error(result.errors.join(" | "));
+      if (result.readiness !== "ready") throw new Error("operability-readiness-not-proven");
+    });
+  }
+
   const multiActorWorkflows = (options.manifest.workflows || [])
     .filter((workflow) => (workflow.actors || []).length > 1);
   if (multiActorWorkflows.length) {
@@ -283,6 +294,7 @@ export async function runSiteAgentConformance(options = {}) {
     executionVerified,
     fullyConformant: declared.declaredComplete && executionVerified,
     tutorialConformant: declared.declaredTutorialComplete && executionVerified,
+    operabilityConformant: declared.declaredOperabilityComplete && executionVerified,
     errors: [...declared.errors, ...proofs.filter(({ status }) => status === "failed").map(({ id, failureCode }) => `${id}: ${failureCode}`)],
   };
 }

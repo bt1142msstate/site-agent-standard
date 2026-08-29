@@ -65,3 +65,9 @@
 20. Complete coverage MUST be proven from an independent host inventory with
     hashed reviewed exemptions. A manifest MUST NOT attest to its own complete
     coverage by counting only declared capabilities.
+21. Query discovery MUST operate on the current permission-filtered catalog and
+    MUST NOT leak denied resource names, descriptions, examples, filters, or
+    counts. Batch execution MUST reauthorize, validate, and bound every request.
+22. Operability evidence MUST exclude record contents, opaque references,
+    personal data, prompts, selectors, and credentials. A numeric score or
+    automated rule set MUST NOT be represented as WCAG conformance.

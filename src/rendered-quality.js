@@ -1,3 +1,5 @@
+import { isVerifiedNavigationTargetVisible } from "./site-navigator.js";
+
 const defaultTextContrast = 4.5;
 const largeTextContrast = 3;
 
@@ -94,6 +96,36 @@ function textValue(element) {
     return normalizeText(element.selectedOptions?.[0]?.textContent);
   }
   return normalizeText(element.innerText || element.textContent);
+}
+
+function accessibleName(element) {
+  const labelledBy = String(element.getAttribute?.("aria-labelledby") || "").trim();
+  const labelledText = labelledBy.split(/\s+/).filter(Boolean)
+    .map((id) => element.ownerDocument.getElementById?.(id)?.textContent || "").join(" ");
+  const controlLabel = element.labels ? [...element.labels].map(({ textContent }) => textContent || "").join(" ") : "";
+  return normalizeText(
+    element.getAttribute?.("aria-label")
+      || labelledText
+      || controlLabel
+      || element.getAttribute?.("alt")
+      || element.getAttribute?.("title")
+      || textValue(element),
+  );
+}
+
+function hasUnavailableAncestor(element) {
+  for (let current = element; current; current = current.parentElement || current.getRootNode?.()?.host) {
+    if (current.hidden || current.inert || current.getAttribute?.("aria-hidden") === "true") return true;
+  }
+  return false;
+}
+
+function hasFocusIndicator(element, windowRef) {
+  const style = windowRef.getComputedStyle(element);
+  const outlineWidth = Number.parseFloat(style.outlineWidth || "0");
+  return (style.outlineStyle !== "none" && outlineWidth >= 2)
+    || (style.boxShadow && style.boxShadow !== "none")
+    || element.hasAttribute?.("data-site-agent-focus-visible");
 }
 
 function isLargeText(style) {
@@ -196,6 +228,49 @@ export function auditRenderedState(options = {}) {
       result.violations.map((code) => ({ code, reference: result.reference }))
     ))),
     results: Object.freeze(results),
+  });
+}
+
+/**
+ * Collects reproducible browser evidence for one mapped control or semantic
+ * navigation target. This is operability evidence, not a standalone WCAG
+ * conformance determination; declared exceptions and manual rules remain part
+ * of the host's ACT-compatible evaluation.
+ */
+export function auditOperableTarget(element, options = {}) {
+  if (!element?.ownerDocument?.defaultView) throw new TypeError("operable-target-element-required");
+  const windowRef = options.window || element.ownerDocument.defaultView;
+  const rect = element.getBoundingClientRect();
+  const name = accessibleName(element);
+  const role = String(element.getAttribute?.("role") || element.localName || "");
+  const nativeFocusable = /^(a|button|input|select|textarea|summary)$/.test(element.localName)
+    && (element.localName !== "a" || Boolean(element.getAttribute?.("href")));
+  const keyboardReachable = !element.disabled && !hasUnavailableAncestor(element)
+    && (nativeFocusable || element.tabIndex >= 0 || options.programmaticTarget === true);
+  const targetSizePass = options.targetSizeException === true || (rect.width >= 24 && rect.height >= 24);
+  const focusNotObscured = isVerifiedNavigationTargetVisible({
+    target: element,
+    windowRef,
+    headerSelector: options.headerSelector,
+    margin: options.margin,
+  });
+  const violations = [];
+  if (!name) violations.push("accessible-name-missing");
+  if (!role) violations.push("semantic-role-missing");
+  if (!keyboardReachable) violations.push("keyboard-unreachable");
+  if (!focusNotObscured) violations.push("focus-obscured-or-clipped");
+  if (!hasFocusIndicator(element, windowRef)) violations.push("focus-indicator-not-evidenced");
+  if (!targetSizePass) violations.push("target-size-below-24px");
+  return Object.freeze({
+    reference: String(options.reference || "mapped-target"),
+    name,
+    role,
+    keyboardReachable,
+    focusNotObscured,
+    focusIndicatorEvidenced: hasFocusIndicator(element, windowRef),
+    targetSize: Object.freeze({ width: rect.width, height: rect.height, pass: targetSizePass }),
+    unavailable: hasUnavailableAncestor(element),
+    violations: Object.freeze(violations),
   });
 }
 

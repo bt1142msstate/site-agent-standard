@@ -15,7 +15,7 @@
       "type": "array",
       "uniqueItems": true,
       "contains": { "const": "core" },
-      "items": { "enum": ["core", "query", "navigation", "action", "presentation"] }
+      "items": { "enum": ["core", "query", "navigation", "action", "presentation", "operability"] }
     },
     "queryResources": { "type": "array", "items": { "$ref": "query.schema.json#/$defs/resource" } },
     "navigationDestinations": { "type": "array", "items": { "$ref": "navigation.schema.json#/$defs/destination" } },
@@ -55,6 +55,32 @@
         },
         "muteSupported": { "const": true },
         "reducedMotionSupported": { "const": true }
+      },
+      "additionalProperties": false
+    },
+    "operability": {
+      "type": "object",
+      "required": ["evidenceSource", "coverage", "viewports", "inputModes", "accessibilityRules", "wcagConformanceClaim", "navigationBudgetMs", "queryBudgetMs"],
+      "properties": {
+        "evidenceSource": { "const": "independent-operability-run" },
+        "coverage": { "const": "all-active-capabilities" },
+        "viewports": {
+          "type": "array",
+          "minItems": 2,
+          "uniqueItems": true,
+          "contains": { "const": "desktop" },
+          "items": { "type": "string", "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$" }
+        },
+        "inputModes": {
+          "type": "array",
+          "uniqueItems": true,
+          "allOf": [{ "contains": { "const": "keyboard" } }, { "contains": { "const": "programmatic" } }],
+          "items": { "enum": ["keyboard", "pointer", "touch", "programmatic", "assistive-technology"] }
+        },
+        "accessibilityRules": { "const": "act-compatible-automated-and-manual" },
+        "wcagConformanceClaim": { "const": false },
+        "navigationBudgetMs": { "type": "integer", "minimum": 100, "maximum": 30000 },
+        "queryBudgetMs": { "type": "integer", "minimum": 50, "maximum": 30000 }
       },
       "additionalProperties": false
     },
@@ -170,7 +196,7 @@
     "conformance": {
       "type": "object",
       "properties": {
-        "claims": { "type": "array", "uniqueItems": true, "items": { "enum": ["core", "query", "navigation", "action", "presentation"] } },
+        "claims": { "type": "array", "uniqueItems": true, "items": { "enum": ["core", "query", "navigation", "action", "presentation", "operability"] } },
         "coverage": {
           "type": "object",
           "properties": {
@@ -188,6 +214,10 @@
     {
       "if": { "properties": { "profiles": { "type": "array", "contains": { "const": "presentation" } } } },
       "then": { "properties": { "presentation": {} }, "required": ["presentation"] }
+    },
+    {
+      "if": { "properties": { "profiles": { "type": "array", "contains": { "const": "operability" } } } },
+      "then": { "properties": { "operability": {} }, "required": ["operability"] }
     }
   ],
   "additionalProperties": false

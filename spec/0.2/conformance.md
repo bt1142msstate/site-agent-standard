@@ -12,6 +12,8 @@
   declared completeness, and execution verification.
 - **Tutorial conformant** additionally requires the Presentation profile and its
   desktop and touch-mobile browser proofs.
+- **Operability conformant** additionally requires independent all-capability
+  navigation, query, and accessibility evidence without a WCAG claim.
 
 The CLI MUST NOT report full conformance without an executable adapter.
 
@@ -70,6 +72,15 @@ The CLI MUST NOT report full conformance without an executable adapter.
 18. Generate Query, Navigation, and Action coverage evidence from independent
     host inventories. Validate counts, stable digest, reviewed exemptions, and
     zero unresolved entries for complete claims.
+19. When Operability is claimed, prove every active destination at each declared
+    desktop and mobile/touch viewport with exact state, visibility, full reveal
+    depth, keyboard reachability, visible and unobscured focus, no keyboard
+    trap, and the declared time budget.
+20. Prove every active Query resource for allowed and denied actors, valid and
+    invalid filters, bounded results, empty and error states, result schemas,
+    provenance, and the declared time budget. Record transparent automated and
+    manual or hybrid results for the required accessibility rules. The report
+    MUST state that it is not a WCAG conformance determination.
 
 An exporter that claims compatibility with another protocol MUST validate its
 generated artifact against that protocol's official schema when one exists and
