@@ -5,6 +5,14 @@ This binding is informative. MCP is not required for Site Agent conformance.
 - Public or application-selected Query resources may be MCP resources when
   directly readable. Parameterized Query requests may be bounded tools whose
   schemas derive from semantic filters.
+- Query tools SHOULD define `outputSchema` and return MCP `structuredContent`
+  conforming to it. A large catalog SHOULD expose a discovery tool plus one
+  bounded batch-read tool rather than forcing one model turn per resource.
+  Batch results retain keyed child status, completeness, provenance, and
+  privacy-safe request/transport metrics.
+- MCP `_meta` may carry cache-optimization metadata, but it does not replace
+  Site Agent freshness, revision, permission scoping, or partial-result
+  disclosure. Resource-update notifications invalidate affected cached reads.
 - Navigation may be a tool that accepts a semantic destination. It never accepts
   a model-authored URL, selector, database path, or credential.
 - Action preparation and confirmation remain separate. An MCP tool may prepare a

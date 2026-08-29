@@ -100,6 +100,17 @@ independent Operability profile. Operability measures exact navigation, query
 behavior, and ACT-compatible accessibility evidence without claiming that an
 automated score establishes WCAG conformance.
 
+Version `0.16.0` makes compound answers a first-class, measurable Query path.
+One permission-scoped discovery call can rank resources for several information
+needs, while one brokered Query call can carry up to twenty reads. The runtime
+validates every child, collapses exact duplicates and explicitly declared
+mode-coverage reads, uses one host batch transport when available, and reports
+requested, executed, deduplicated, and transport-call counts. Every normalized
+result includes completeness and provenance evidence; sparse field selection is
+allowed only from a declared allowlist. A deterministic query-quality evaluator
+gates answer correctness, fact/source coverage, partial-result disclosure,
+latency, model tool calls, and host transport calls.
+
 ```json
 {
   "materialization": {
@@ -248,6 +259,18 @@ const result = await agent.query({
 });
 
 const catalog = await agent.findQueryResources({ text: "unpaid family invoices" });
+
+const compoundCatalog = await agent.findQueryResources({ needs: [
+  { key: "policy", text: "privacy analytics policy" },
+  { key: "operations", text: "staff clocked in now" },
+] });
+
+const compound = await agent.queryBatch({
+  requests: [
+    { key: "policy", resourceId: "site-copy", filters: { topic: "analytics" } },
+    { key: "operations", resourceId: "open-shifts", mode: "count" },
+  ],
+});
 
 await agent.navigate(result.items[0].destination);
 

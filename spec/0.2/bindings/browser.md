@@ -21,6 +21,14 @@ Agent conformance.
   plus one generic read tool rather than registering an unbounded tool per
   resource. The broker MUST preserve resource schemas, limits, provenance,
   freshness, authorization, and active revision semantics.
+- Brokered discovery SHOULD accept several keyed information needs in one call.
+  The generic read tool SHOULD accept a bounded keyed request array, validate
+  every child, and use the host batch adapter so independent frontend, backend,
+  and document reads do not require repeated browser-agent turns. Its structured
+  result reports completeness, provenance, deduplication, and transport count.
+- Imperative registrations SHOULD publish both `inputSchema` and `outputSchema`.
+  The execution boundary validates both; the browser agent's structured call is
+  not trusted merely because it matched a model-side schema.
 - Tool registration and execution use abort signals. Unmount, sign-out, authority
   changes, navigation, and timeout release registrations and in-flight work.
 - Tool names, descriptions, parameter descriptions, and results SHOULD stay

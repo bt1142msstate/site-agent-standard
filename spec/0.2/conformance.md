@@ -81,6 +81,13 @@ The CLI MUST NOT report full conformance without an executable adapter.
     provenance, and the declared time budget. Record transparent automated and
     manual or hybrid results for the required accessibility rules. The report
     MUST state that it is not a WCAG conformance determination.
+21. For compound Query paths, prove multi-need discovery remains permission
+    filtered; exact duplicates and declared mode coverage execute once; a host
+    batch adapter uses one transport; keyed child order and failures survive;
+    sparse fields stay allowlisted; and every result carries non-unknown
+    completeness plus semantic provenance. Run independently sourced answer
+    fixtures that gate correctness, fact/source coverage, partial disclosure,
+    latency, model tool calls, internal reads, and transport calls.
 
 An exporter that claims compatibility with another protocol MUST validate its
 generated artifact against that protocol's official schema when one exists and

@@ -8,6 +8,7 @@ import {
   createAsyncApiBinding,
   createMcpBinding,
   createSiteAgent,
+  evaluateQueryQuality,
   negotiateSiteAgentVersion,
   registerWebMcpTools,
   runNavigationReveal,
@@ -347,6 +348,107 @@ test("large query catalogs are permission-filtered, discoverable, batchable, and
   handle.unregister();
 });
 
+test("query batches collapse declared mode coverage into one host transport and preserve evidence", async () => {
+  const manifest = example();
+  const resource = manifest.queryResources[0];
+  resource.aliases = ["customer purchases", "order count"];
+  resource.modeCoverage = [{ mode: "records", covers: ["count"] }];
+  resource.selectableFields = ["label", "status"];
+  resource.defaultFields = ["label"];
+  resource.batching = { group: "orders", maxSize: 20, consistency: "snapshot" };
+  assert.deepEqual(validateSiteAgentManifest(manifest), { valid: true, errors: [] });
+  let transports = 0;
+  const agent = createSiteAgent({
+    manifest,
+    context: { authenticated: true, permissions: ["orders.view"] },
+    adapters: {
+      query: {
+        execute: async () => { throw new Error("single transport must not run"); },
+        executeBatch: async ({ requests }) => {
+          transports += 1;
+          assert.equal(requests.length, 1);
+          assert.equal(requests[0].request.mode, "records");
+          return { results: requests.map(({ key }) => ({
+            key,
+            result: {
+              items: [{ reference: "opaque-order-1", label: "Order 1", fields: { status: "open" } }],
+              total: 1,
+              complete: true,
+              asOf: "2026-08-29T06:00:00.000Z",
+              revision: "orders-42",
+            },
+          })) };
+        },
+      },
+    },
+  });
+  const result = await agent.queryBatch({
+    consistency: "snapshot",
+    requests: [
+      { key: "records", resourceId: "orders", mode: "records", filters: { status: "open" } },
+      { key: "count", resourceId: "orders", mode: "count", filters: { status: "open" } },
+      { key: "count-again", resourceId: "orders", mode: "count", filters: { status: "open" } },
+    ],
+  });
+  assert.equal(transports, 1);
+  assert.deepEqual(result.metrics, {
+    requested: 3,
+    executed: 1,
+    deduplicated: 2,
+    transportCalls: 1,
+    durationMs: result.metrics.durationMs,
+  });
+  assert.deepEqual(result.results.map(({ key }) => key), ["records", "count", "count-again"]);
+  assert.ok(result.results.every(({ result: item }) => item.evidence.completeness === "complete"));
+  assert.equal(result.results[1].result.mode, "count");
+  assert.equal(result.results[0].result.evidence.provenance[0].revision, "orders-42");
+
+  const discovery = await agent.findQueryResources({
+    needs: [{ key: "open", text: "open customer purchases" }, { key: "totals", text: "order count" }],
+  });
+  assert.deepEqual(discovery.needs.map(({ key }) => key), ["open", "totals"]);
+  assert.equal(discovery.needs[0].resources[0].resourceId, "orders");
+});
+
+test("query quality gates answer accuracy, evidence coverage, disclosure, and request cost", () => {
+  const passing = evaluateQueryQuality({ cases: [{
+    id: "mixed-live-static",
+    answerCorrect: true,
+    expectedFacts: ["privacy.analytics", "open-shifts.count"],
+    supportedFacts: ["privacy.analytics", "open-shifts.count"],
+    requiredSources: ["static-site-content", "open-shifts"],
+    returnedSources: ["static-site-content", "open-shifts"],
+    completeness: "complete",
+    toolCalls: 1,
+    transportCalls: 1,
+    internalRequests: 2,
+    deduplicatedRequests: 0,
+    durationMs: 900,
+  }] });
+  assert.equal(passing.readiness, "ready");
+  assert.equal(passing.cases.accuracyPercent, 100);
+
+  const failing = evaluateQueryQuality({ cases: [{
+    id: "silent-partial",
+    answerCorrect: false,
+    expectedFacts: ["one", "two"],
+    supportedFacts: ["one"],
+    requiredSources: ["a", "b"],
+    returnedSources: ["a"],
+    completeness: "partial",
+    partialDisclosed: false,
+    toolCalls: 2,
+    transportCalls: 2,
+    internalRequests: 2,
+    deduplicatedRequests: 0,
+    durationMs: 13_000,
+  }] });
+  assert.equal(failing.readiness, "not-ready");
+  assert.match(failing.errors.join("\n"), /answer-incorrect/);
+  assert.match(failing.errors.join("\n"), /partial-not-disclosed/);
+  assert.match(failing.errors.join("\n"), /transport-call-budget-exceeded/);
+});
+
 test("nested reveal orchestration verifies every semantic layer in order and waits for virtualization", async () => {
   const destination = {
     targetKinds: ["document-segment"],
@@ -505,7 +607,7 @@ test("full conformance requires and records executable host proofs", async () =>
   const result = await runSiteAgentConformance({ manifest, ...createConformanceTarget(manifest) });
   assert.equal(result.fullyConformant, true, JSON.stringify(result.errors));
   assert.equal(result.executionVerified, true);
-  assert.equal(result.proofs.length, 17);
+  assert.equal(result.proofs.length, 18);
   assert.ok(result.proofs.every(({ status }) => status === "passed"));
 });
 

@@ -20,7 +20,22 @@
         "sunsetAt": { "type": "string", "format": "date-time" },
         "execution": { "enum": ["local", "host"] },
         "modes": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string" } },
+        "modeCoverage": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "object",
+            "required": ["mode", "covers"],
+            "properties": {
+              "mode": { "type": "string", "minLength": 1 },
+              "covers": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string", "minLength": 1 } }
+            },
+            "additionalProperties": false
+          }
+        },
         "filters": { "type": "object", "additionalProperties": { "type": "object" } },
+        "selectableFields": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string", "minLength": 1, "maxLength": 120 } },
+        "defaultFields": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string", "minLength": 1, "maxLength": 120 } },
         "sorts": { "type": "array", "uniqueItems": true, "items": { "type": "string" } },
         "maxResults": { "type": "integer", "minimum": 1, "maximum": 1000 },
         "resultSchema": { "type": "object" },
@@ -44,6 +59,16 @@
           },
           "additionalProperties": false
         },
+        "batching": {
+          "type": "object",
+          "required": ["group", "maxSize", "consistency"],
+          "properties": {
+            "group": { "type": "string", "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$" },
+            "maxSize": { "type": "integer", "minimum": 1, "maximum": 100 },
+            "consistency": { "enum": ["independent", "snapshot"] }
+          },
+          "additionalProperties": false
+        },
         "materialization": {
           "type": "object",
           "required": ["basis", "stage", "surfaceParity", "nestedContent", "nestedDestination"],
@@ -63,6 +88,10 @@
       },
       "patternProperties": { "^x-[a-z0-9._-]+$": true },
       "allOf": [
+        {
+          "if": { "properties": { "defaultFields": {} }, "required": ["defaultFields"] },
+          "then": { "properties": { "selectableFields": {} }, "required": ["selectableFields"] }
+        },
         {
           "if": {
             "properties": {

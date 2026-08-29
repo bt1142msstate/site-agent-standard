@@ -37,12 +37,16 @@ export interface QueryResource extends SiteAgentCapability {
   examples?: string[];
   execution: "local" | "host";
   modes: string[];
+  modeCoverage?: Array<{ mode: string; covers: string[] }>;
   filters: Record<string, Record<string, unknown>>;
+  selectableFields?: string[];
+  defaultFields?: string[];
   sorts?: string[];
   maxResults?: number;
   resultSchema?: Record<string, unknown>;
   pagination?: { style: "none" | "cursor"; defaultLimit?: number; maxLimit?: number };
   freshness?: { mode: "static" | "snapshot" | "live"; maxAgeSeconds?: number; eventIds?: string[] };
+  batching?: { group: string; maxSize: number; consistency: "independent" | "snapshot" };
   materialization?: {
     basis: "rendered-user-surface" | "canonical-structured-source" | "document-text" | "external";
     stage: "build" | "runtime" | "request";
@@ -189,6 +193,7 @@ export * from "./problem.js";
 export * from "./execution.js";
 export * from "./coverage.js";
 export * from "./operability.js";
+export * from "./query-quality.js";
 
 export interface SiteAgentContext {
   authenticated: boolean;
@@ -213,12 +218,14 @@ export interface NavigationOutcome {
 }
 
 export interface QueryRequest {
+  key?: string;
   resourceId: string;
   mode?: string;
   filters?: Record<string, unknown>;
   sort?: string;
   limit?: number;
   cursor?: string;
+  select?: string[];
   signal?: AbortSignal;
   deadlineAt?: string | number;
   correlationId?: string;
@@ -226,6 +233,7 @@ export interface QueryRequest {
 
 export interface QueryDiscoveryRequest {
   text?: string;
+  needs?: Array<{ key: string; text: string }>;
   mode?: string;
   execution?: "local" | "host";
   limit?: number;
@@ -234,6 +242,7 @@ export interface QueryDiscoveryRequest {
 export interface QueryDiscoveryResult {
   text: string;
   total: number;
+  needs?: Array<{ key: string; text: string; resources: QueryDiscoveryResult["resources"] }>;
   resources: Array<{
     resourceId: string;
     title: string;
@@ -252,11 +261,13 @@ export interface QueryBatchRequest {
   requests: QueryRequest[];
   concurrency?: number;
   failFast?: boolean;
+  consistency?: "independent" | "snapshot";
 }
 
 export interface QueryBatchResult {
   status: "succeeded" | "partial";
-  results: Array<{ resourceId: string; status: "succeeded"; result: QueryResult } | { resourceId: string; status: "failed"; problem: unknown }>;
+  results: Array<{ key: string; resourceId: string; status: "succeeded"; result: QueryResult } | { key: string; resourceId: string; status: "failed"; problem: unknown }>;
+  metrics: { requested: number; executed: number; deduplicated: number; transportCalls: number; durationMs: number };
 }
 
 export interface CapabilitySnapshot {
@@ -283,6 +294,11 @@ export interface QueryResult {
   status: "succeeded" | "partial";
   nextCursor: string | null;
   asOf: string | null;
+  evidence: {
+    completeness: "complete" | "partial" | "unknown";
+    reasons: string[];
+    provenance: Array<{ resourceId: string; asOf: string | null; revision: string | null; source?: string }>;
+  };
 }
 
 export interface ActionPlan {
@@ -324,6 +340,7 @@ export interface SiteAgentOptions {
   adapters: {
     query?: {
       execute(input: unknown): unknown | Promise<unknown>;
+      executeBatch?(input: unknown): unknown | Promise<unknown>;
       subscribe?(input: unknown): unknown | Promise<unknown>;
     } | ((input: unknown) => unknown | Promise<unknown>);
     navigation?: { navigate(input: unknown): unknown | Promise<unknown> } | ((input: unknown) => unknown | Promise<unknown>);

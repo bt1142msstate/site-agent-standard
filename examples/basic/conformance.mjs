@@ -12,6 +12,7 @@ export default function createConformanceTarget(manifest) {
       query: async ({ request }) => request.resourceId === "public-document-text"
         ? ({
             total: 1,
+            complete: true,
             summary: "One matching document excerpt",
             items: [{
               reference: "opaque-excerpt-1",
@@ -26,6 +27,7 @@ export default function createConformanceTarget(manifest) {
           })
         : ({
             total: 1,
+            complete: true,
             summary: "One matching order",
             asOf: "2026-08-04T00:00:00.000Z",
             items: [{
@@ -87,6 +89,14 @@ export default function createConformanceTarget(manifest) {
       materialization: { verify: () => true },
       nestedNavigation: { request: { resourceId: "public-document-text", filters: { query: "tuition" } } },
       query: { request: { resourceId: "orders", filters: { status: "open" } } },
+      queryBatch: {
+        request: {
+          requests: [
+            { key: "open-orders", resourceId: "orders", filters: { status: "open" } },
+            { key: "same-open-orders", resourceId: "orders", filters: { status: "open" } },
+          ],
+        },
+      },
       invalidQuery: { request: { resourceId: "orders", filters: { status: 7 } } },
       navigation: {
         intent: {

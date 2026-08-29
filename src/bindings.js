@@ -16,10 +16,23 @@ function toolAnnotations(action) {
   };
 }
 
+function queryEvidenceSchema() {
+  return {
+    type: "object",
+    required: ["completeness", "reasons", "provenance"],
+    properties: {
+      completeness: { enum: ["complete", "partial", "unknown"] },
+      reasons: { type: "array", items: { type: "string" } },
+      provenance: { type: "array", items: { type: "object" } },
+    },
+    additionalProperties: false,
+  };
+}
+
 function queryOutputSchema(resource) {
   return {
     type: "object",
-    required: ["resourceId", "status", "data", "items", "mode", "total", "summary", "nextCursor", "asOf"],
+    required: ["resourceId", "status", "data", "items", "mode", "total", "summary", "nextCursor", "asOf", "evidence"],
     properties: {
       resourceId: { const: resource.id },
       status: { enum: ["succeeded", "partial"] },
@@ -30,6 +43,7 @@ function queryOutputSchema(resource) {
       summary: { type: "string" },
       nextCursor: { type: ["string", "null"] },
       asOf: { type: ["string", "null"] },
+      evidence: queryEvidenceSchema(),
     },
     additionalProperties: false,
   };
@@ -52,6 +66,9 @@ export function createMcpBinding(manifest, context = {}) {
         sort: resource.sorts?.length ? { type: "string", enum: resource.sorts } : { type: "string" },
         limit: { type: "integer", minimum: 1, maximum: resource.pagination?.maxLimit || resource.maxResults || 100 },
         cursor: { type: "string" },
+        ...(resource.selectableFields?.length ? {
+          select: { type: "array", uniqueItems: true, items: { type: "string", enum: resource.selectableFields } },
+        } : {}),
       },
       additionalProperties: false,
     },
@@ -131,9 +148,13 @@ export async function registerWebMcpTools(options = {}) {
           sort: resource.sorts?.length ? { type: "string", enum: resource.sorts } : { type: "string" },
           limit: { type: "integer", minimum: 1, maximum: resource.pagination?.maxLimit || resource.maxResults || 100 },
           cursor: { type: "string" },
+          ...(resource.selectableFields?.length ? {
+            select: { type: "array", uniqueItems: true, items: { type: "string", enum: resource.selectableFields } },
+          } : {}),
         },
         additionalProperties: false,
       },
+      outputSchema: queryOutputSchema(resource),
       annotations: { readOnlyHint: true, untrustedContentHint: true },
       execute: (request) => options.agent.query({ resourceId: resource.id, ...request }),
       },
@@ -149,9 +170,30 @@ export async function registerWebMcpTools(options = {}) {
         type: "object",
         properties: {
           text: { type: "string", maxLength: 500 },
+          needs: {
+            type: "array",
+            maxItems: 20,
+            items: {
+              type: "object",
+              required: ["key", "text"],
+              properties: { key: { type: "string", maxLength: 80 }, text: { type: "string", maxLength: 500 } },
+              additionalProperties: false,
+            },
+          },
           execution: { type: "string", enum: ["local", "host"] },
           mode: { type: "string" },
           limit: { type: "integer", minimum: 1, maximum: 50 },
+        },
+        additionalProperties: false,
+      },
+      outputSchema: {
+        type: "object",
+        required: ["text", "total", "resources"],
+        properties: {
+          text: { type: "string" },
+          total: { type: "number" },
+          resources: { type: "array", items: { type: "object" } },
+          needs: { type: "array", items: { type: "object" } },
         },
         additionalProperties: false,
       },
@@ -163,10 +205,9 @@ export async function registerWebMcpTools(options = {}) {
     definition: {
       name: "site.query",
       title: "Query site information",
-      description: "Read one authorized Site Agent resource selected with site.find_queries. Results include opaque references and exact semantic destinations when the source can be revealed in the site.",
+      description: "Read one or up to twenty authorized Site Agent resources in one call. Batch every independent read needed for the answer; the host deduplicates compatible requests and reports completeness, provenance, and transport cost.",
       inputSchema: {
         type: "object",
-        required: ["resourceId"],
         properties: {
           resourceId: { type: "string" },
           mode: { type: "string" },
@@ -174,11 +215,37 @@ export async function registerWebMcpTools(options = {}) {
           sort: { type: "string" },
           limit: { type: "integer", minimum: 1, maximum: 1000 },
           cursor: { type: "string" },
+          select: { type: "array", uniqueItems: true, items: { type: "string" } },
+          requests: {
+            type: "array",
+            minItems: 1,
+            maxItems: 20,
+            items: {
+              type: "object",
+              required: ["key", "resourceId"],
+              properties: {
+                key: { type: "string", maxLength: 80 },
+                resourceId: { type: "string" },
+                mode: { type: "string" },
+                filters: { type: "object" },
+                sort: { type: "string" },
+                limit: { type: "integer", minimum: 1, maximum: 1000 },
+                cursor: { type: "string" },
+                select: { type: "array", uniqueItems: true, items: { type: "string" } },
+              },
+              additionalProperties: false,
+            },
+          },
+          consistency: { type: "string", enum: ["independent", "snapshot"] },
         },
+        anyOf: [{ required: ["resourceId"] }, { required: ["requests"] }],
         additionalProperties: false,
       },
+      outputSchema: { type: "object" },
       annotations: { readOnlyHint: true, untrustedContentHint: true },
-      execute: (request) => options.agent.query(request),
+      execute: (request) => Array.isArray(request.requests)
+        ? options.agent.queryBatch(request)
+        : options.agent.query(request),
     },
   }];
 

@@ -24,6 +24,7 @@ export * from "./execution.js";
 export * from "./coverage.js";
 export * from "./navigation-reveal.js";
 export * from "./operability.js";
+export * from "./query-quality.js";
 
 function now() {
   return Date.now();
@@ -35,6 +36,14 @@ function normalizeSearchText(value) {
 
 function searchTokens(value) {
   return [...new Set(normalizeSearchText(value).split(/\s+/).filter((token) => token.length > 1))];
+}
+
+function stableJson(value) {
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(",")}]`;
+  if (value && typeof value === "object") {
+    return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${stableJson(value[key])}`).join(",")}}`;
+  }
+  return JSON.stringify(value);
 }
 
 function queryResourceScore(resource, text) {
@@ -73,7 +82,9 @@ function describeQueryResource(resource, score) {
     modes: Object.freeze([...(resource.modes || [])]),
     filters: Object.freeze(Object.keys(resource.filters || {})),
     sorts: Object.freeze([...(resource.sorts || [])]),
+    selectableFields: Object.freeze([...(resource.selectableFields || [])]),
     freshness: resource.freshness ? Object.freeze({ ...resource.freshness }) : null,
+    batching: resource.batching ? Object.freeze({ ...resource.batching }) : null,
     destinationId: resource.destinationId || null,
     score,
   });
@@ -241,6 +252,131 @@ export function createSiteAgent(options = {}) {
     });
   }
 
+  function prepareQuery(currentManifest, context, request = {}) {
+    const resource = findCapability(currentManifest.queryResources, request.resourceId, "query");
+    assertAuthorized(resource, context);
+    const mode = request.mode || resource.modes[0];
+    if (!resource.modes.includes(mode)) throw new Error("query-mode-not-supported");
+    const filters = request.filters || {};
+    for (const key of Object.keys(filters)) {
+      if (!Object.hasOwn(resource.filters, key)) throw new Error(`query-filter-not-supported:${key}`);
+    }
+    assertSchemaValue({
+      type: "object",
+      properties: resource.filters,
+      additionalProperties: false,
+    }, filters, "query-filters");
+    if (request.sort && !(resource.sorts || []).includes(request.sort)) throw new Error("query-sort-not-supported");
+    const pagination = resource.pagination || {
+      style: "none",
+      defaultLimit: resource.maxResults || 25,
+      maxLimit: resource.maxResults || 100,
+    };
+    if (request.cursor && pagination.style !== "cursor") throw new Error("query-cursor-not-supported");
+    const maximum = Number(pagination.maxLimit || resource.maxResults || 100);
+    const limit = Math.min(Math.max(Number(request.limit || pagination.defaultLimit || resource.maxResults || 25), 1), maximum);
+    const select = request.select === undefined ? [...(resource.defaultFields || [])] : [...new Set(request.select || [])];
+    if (request.select !== undefined && !resource.selectableFields) throw new Error("query-field-selection-not-supported");
+    for (const field of select) {
+      if (!(resource.selectableFields || []).includes(field)) throw new Error(`query-field-not-selectable:${field}`);
+    }
+    const normalizedRequest = { ...request, filters, limit, mode, ...(select.length ? { select } : {}) };
+    const fingerprint = stableJson({
+      resourceId: resource.id,
+      mode,
+      filters,
+      sort: request.sort || null,
+      limit,
+      cursor: request.cursor || null,
+      select,
+    });
+    const baseFingerprint = stableJson({
+      resourceId: resource.id,
+      filters,
+      sort: request.sort || null,
+      limit,
+      cursor: request.cursor || null,
+      select,
+    });
+    return { resource, pagination, request: normalizedRequest, fingerprint, baseFingerprint };
+  }
+
+  function normalizeEvidence(resource, raw, nextCursor, asOf) {
+    const explicit = raw?.evidence && typeof raw.evidence === "object" ? raw.evidence : {};
+    const reasons = [...new Set([
+      ...(Array.isArray(explicit.reasons) ? explicit.reasons : []),
+      ...(raw?.status === "partial" ? ["source-reported-partial"] : []),
+      ...(raw?.truncated === true || nextCursor ? ["more-results-available"] : []),
+    ].map((value) => String(value || "").trim()).filter(Boolean))];
+    let completeness = explicit.completeness;
+    if (!new Set(["complete", "partial", "unknown"]).has(completeness)) {
+      if (raw?.complete === true && !reasons.length) completeness = "complete";
+      else if (raw?.complete === false || reasons.length) completeness = "partial";
+      else completeness = "unknown";
+    }
+    const declaredSources = Array.isArray(explicit.provenance)
+      ? explicit.provenance
+      : Array.isArray(explicit.sources) ? explicit.sources : [];
+    const provenance = declaredSources.length ? declaredSources.map((source) => ({
+      resourceId: String(source.resourceId || resource.id),
+      asOf: typeof source.asOf === "string" ? source.asOf : asOf,
+      revision: typeof source.revision === "string" ? source.revision : null,
+      ...(source.source ? { source: String(source.source).slice(0, 160) } : {}),
+    })) : [{
+      resourceId: resource.id,
+      asOf,
+      revision: typeof raw?.revision === "string" ? raw.revision : null,
+    }];
+    return Object.freeze({
+      completeness,
+      reasons: Object.freeze(reasons),
+      provenance: Object.freeze(provenance.map(Object.freeze)),
+    });
+  }
+
+  function normalizeQueryResult(currentManifest, prepared, raw) {
+    const { resource, pagination, request } = prepared;
+    if (resource.resultSchema) assertSchemaValue(resource.resultSchema, raw, "query-result");
+    const items = Array.isArray(raw?.items) ? raw.items.map((item) => {
+      if (!item || typeof item.reference !== "string" || !item.reference.trim()) throw new Error("invalid-query-result-reference");
+      const declaredDestination = resource.destinationId
+        ? currentManifest.navigationDestinations.find(({ id }) => id === resource.destinationId)
+        : null;
+      const inferredTargetKind = resource.resultTargetKind
+        || (declaredDestination?.targetKinds?.length === 1 ? declaredDestination.targetKinds[0] : null);
+      const destination = validateSemanticDestination(item.destination || (resource.destinationId ? {
+        destinationId: resource.destinationId,
+        state: item.destinationState || {},
+        target: { reference: item.reference, ...(inferredTargetKind ? { kind: inferredTargetKind } : {}) },
+      } : null), currentManifest);
+      if (resource.materialization?.nestedDestination === "exact-reveal-required") {
+        const declaration = findCapability(currentManifest.navigationDestinations, destination?.destinationId, "navigation");
+        assertNestedRevealIntent(destination, declaration);
+      }
+      return {
+        reference: item.reference,
+        label: String(item.label || "").slice(0, 240),
+        fields: item.fields && typeof item.fields === "object" ? item.fields : {},
+        destination,
+      };
+    }) : [];
+    const nextCursor = pagination.style === "cursor" && typeof raw?.nextCursor === "string" ? raw.nextCursor : null;
+    const asOf = typeof raw?.asOf === "string" ? raw.asOf : null;
+    const evidence = normalizeEvidence(resource, raw, nextCursor, asOf);
+    return Object.freeze({
+      resourceId: resource.id,
+      data: raw,
+      items: Object.freeze(items),
+      mode: request.mode,
+      total: Number.isFinite(raw?.total) ? raw.total : items.length,
+      summary: String(raw?.summary || "").slice(0, 1000),
+      status: evidence.completeness === "partial" || raw?.status === "partial" ? "partial" : "succeeded",
+      nextCursor,
+      asOf,
+      evidence,
+    });
+  }
+
   const api = {
     manifest,
     presentation,
@@ -260,19 +396,35 @@ export function createSiteAgent(options = {}) {
         const filtered = filterSiteAgentManifest(currentManifest, await getContext(), { stripExtensions: true });
         const text = String(request.text || "").slice(0, 500);
         const maximum = Math.min(Math.max(Number(request.limit || 8), 1), 50);
-        const resources = filtered.queryResources
+        const rankAll = (searchText) => filtered.queryResources
           .filter(({ status }) => status !== "sunset")
           .filter((resource) => !request.execution || resource.execution === request.execution)
           .filter((resource) => !request.mode || resource.modes.includes(request.mode))
-          .map((resource) => ({ resource, score: queryResourceScore(resource, text) }))
-          .filter(({ score }) => !text.trim() || score > 0)
+          .map((resource) => ({ resource, score: queryResourceScore(resource, searchText) }))
+          .filter(({ score }) => !searchText.trim() || score > 0)
           .sort((left, right) => right.score - left.score
             || left.resource.id.localeCompare(right.resource.id));
+        const rank = (searchText) => rankAll(searchText)
+          .slice(0, maximum)
+          .map(({ resource, score }) => describeQueryResource(resource, score));
+        const resources = rank(text);
+        const needs = (Array.isArray(request.needs) ? request.needs : []).slice(0, 20).map((need, index) => ({
+          key: String(need?.key || `need-${index + 1}`).slice(0, 80),
+          text: String(need?.text || "").slice(0, 500),
+        }));
+        if (new Set(needs.map(({ key }) => key)).size !== needs.length) {
+          throw new TypeError("query-discovery-keys-must-be-unique");
+        }
         return Object.freeze({
           text,
-          total: resources.length,
-          resources: Object.freeze(resources.slice(0, maximum)
-            .map(({ resource, score }) => describeQueryResource(resource, score))),
+          total: rankAll(text).length,
+          resources: Object.freeze(resources),
+          ...(needs.length ? {
+            needs: Object.freeze(needs.map((need) => Object.freeze({
+              ...need,
+              resources: Object.freeze(rank(need.text)),
+            }))),
+          } : {}),
         });
       });
     },
@@ -280,99 +432,175 @@ export function createSiteAgent(options = {}) {
       return invoke("query", request.resourceId, request, async (execution) => {
         const currentManifest = await getManifest();
         const context = await getContext();
-        const resource = findCapability(currentManifest.queryResources, request.resourceId, "query");
-        assertAuthorized(resource, context);
-        const mode = request.mode || resource.modes[0];
-        if (!resource.modes.includes(mode)) throw new Error("query-mode-not-supported");
-        const filters = request.filters || {};
-        for (const key of Object.keys(filters)) {
-          if (!Object.hasOwn(resource.filters, key)) throw new Error(`query-filter-not-supported:${key}`);
-        }
-        assertSchemaValue({
-          type: "object",
-          properties: resource.filters,
-          additionalProperties: false,
-        }, filters, "query-filters");
-        if (request.sort && !(resource.sorts || []).includes(request.sort)) throw new Error("query-sort-not-supported");
-        const pagination = resource.pagination || { style: "none", defaultLimit: resource.maxResults || 25, maxLimit: resource.maxResults || 100 };
-        if (request.cursor && pagination.style !== "cursor") throw new Error("query-cursor-not-supported");
-        const maximum = Number(pagination.maxLimit || resource.maxResults || 100);
-        const limit = Math.min(Math.max(Number(request.limit || pagination.defaultLimit || resource.maxResults || 25), 1), maximum);
+        const prepared = prepareQuery(currentManifest, context, request);
         const adapter = requiredAdapter(adapters.query?.execute || adapters.query, "query");
         execution.assertActive();
-        const raw = await adapter({ context, execution, request: { ...request, filters, limit, mode }, resource });
-        if (resource.resultSchema) assertSchemaValue(resource.resultSchema, raw, "query-result");
-        const items = Array.isArray(raw?.items) ? raw.items.map((item) => {
-          if (!item || typeof item.reference !== "string" || !item.reference.trim()) throw new Error("invalid-query-result-reference");
-          const declaredDestination = resource.destinationId
-            ? currentManifest.navigationDestinations.find(({ id }) => id === resource.destinationId)
-            : null;
-          const inferredTargetKind = resource.resultTargetKind
-            || (declaredDestination?.targetKinds?.length === 1 ? declaredDestination.targetKinds[0] : null);
-          const destination = validateSemanticDestination(item.destination || (resource.destinationId ? {
-            destinationId: resource.destinationId,
-            state: item.destinationState || {},
-            target: { reference: item.reference, ...(inferredTargetKind ? { kind: inferredTargetKind } : {}) },
-          } : null), currentManifest);
-          if (resource.materialization?.nestedDestination === "exact-reveal-required") {
-            const declaration = findCapability(currentManifest.navigationDestinations, destination?.destinationId, "navigation");
-            assertNestedRevealIntent(destination, declaration);
-          }
-          return {
-            reference: item.reference,
-            label: String(item.label || "").slice(0, 240),
-            fields: item.fields && typeof item.fields === "object" ? item.fields : {},
-            destination,
-          };
-        }) : [];
-        return {
-          resourceId: resource.id,
-          data: raw,
-          items,
-          mode,
-          total: Number.isFinite(raw?.total) ? raw.total : items.length,
-          summary: String(raw?.summary || "").slice(0, 1000),
-          status: raw?.status === "partial" ? "partial" : "succeeded",
-          nextCursor: pagination.style === "cursor" && typeof raw?.nextCursor === "string" ? raw.nextCursor : null,
-          asOf: typeof raw?.asOf === "string" ? raw.asOf : null,
-        };
+        const raw = await adapter({ context, execution, request: prepared.request, resource: prepared.resource });
+        return normalizeQueryResult(currentManifest, prepared, raw);
       });
     },
     async queryBatch(request = {}) {
+      const startedAt = now();
       const requests = Array.isArray(request.requests) ? request.requests : [];
       if (!requests.length) throw new TypeError("query-batch-requests-required");
       if (requests.length > 20) throw new TypeError("query-batch-too-large");
+      const keys = requests.map((child, index) => String(child?.key || `request-${index + 1}`).slice(0, 80));
+      if (new Set(keys).size !== keys.length) throw new TypeError("query-batch-keys-must-be-unique");
       const concurrency = Math.min(Math.max(Number(request.concurrency || 4), 1), 8);
       const results = new Array(requests.length);
-      let cursor = 0;
-      let firstFailure = null;
-      const worker = async () => {
-        while (cursor < requests.length && !(request.failFast && firstFailure)) {
-          const index = cursor;
-          cursor += 1;
-          const child = requests[index] || {};
-          try {
-            results[index] = Object.freeze({
-              resourceId: String(child.resourceId || ""),
-              status: "succeeded",
-              result: await api.query(child),
-            });
-          } catch (error) {
-            const problem = toSiteAgentProblem(error, { correlationId: child.correlationId });
-            results[index] = Object.freeze({
-              resourceId: String(child.resourceId || ""),
-              status: "failed",
-              problem,
-            });
-            firstFailure ||= problem;
+      const currentManifest = await getManifest();
+      const context = await getContext();
+      const preparedEntries = [];
+      let firstFailure;
+      for (let index = 0; index < requests.length; index += 1) {
+        const child = requests[index] || {};
+        try {
+          preparedEntries.push({ index, key: keys[index], prepared: prepareQuery(currentManifest, context, child) });
+        } catch (error) {
+          const problem = toSiteAgentProblem(error, { correlationId: child.correlationId });
+          results[index] = Object.freeze({ key: keys[index], resourceId: String(child.resourceId || ""), status: "failed", problem });
+          firstFailure ||= problem;
+        }
+      }
+      if (request.failFast && firstFailure) throw firstFailure;
+      if (request.consistency === "snapshot") {
+        const groups = new Set(preparedEntries.map(({ prepared }) => prepared.resource.batching?.group));
+        if (groups.has(undefined) || groups.size !== 1
+          || preparedEntries.some(({ prepared }) => prepared.resource.batching?.consistency !== "snapshot")) {
+          throw new TypeError("query-batch-snapshot-consistency-not-supported");
+        }
+      }
+
+      const executions = [];
+      const executionByEntry = new Map();
+      const groups = new Map();
+      for (const entry of preparedEntries) {
+        const values = groups.get(entry.prepared.baseFingerprint) || [];
+        values.push(entry);
+        groups.set(entry.prepared.baseFingerprint, values);
+      }
+      for (const entries of groups.values()) {
+        const covering = entries.find(({ prepared }) => {
+          const covers = new Set([
+            prepared.request.mode,
+            ...(prepared.resource.modeCoverage || []).find(({ mode }) => mode === prepared.request.mode)?.covers || [],
+          ]);
+          return entries.every((entry) => covers.has(entry.prepared.request.mode));
+        });
+        if (covering) {
+          const execution = { ...covering, executionKey: `execution-${executions.length + 1}` };
+          executions.push(execution);
+          entries.forEach((entry) => executionByEntry.set(entry, execution));
+          continue;
+        }
+        const byFingerprint = new Map();
+        for (const entry of entries) {
+          let execution = byFingerprint.get(entry.prepared.fingerprint);
+          if (!execution) {
+            execution = { ...entry, executionKey: `execution-${executions.length + 1}` };
+            executions.push(execution);
+            byFingerprint.set(entry.prepared.fingerprint, execution);
+          }
+          executionByEntry.set(entry, execution);
+        }
+      }
+
+      const rawByExecution = new Map();
+      const problemByExecution = new Map();
+      let transportCalls = 0;
+      const batchAdapter = adapters.query?.executeBatch;
+      if (executions.length && typeof batchAdapter === "function") {
+        const declaredMax = executions.reduce((maximum, entry) => (
+          Math.min(maximum, Number(entry.prepared.resource.batching?.maxSize || 20))
+        ), 20);
+        for (let offset = 0; offset < executions.length; offset += declaredMax) {
+          const chunk = executions.slice(offset, offset + declaredMax);
+          transportCalls += 1;
+          const execution = createExecutionContext(request);
+          execution.assertActive();
+          const batchResult = await batchAdapter({
+            context,
+            execution,
+            consistency: request.consistency || "independent",
+            requests: chunk.map((entry) => ({
+              key: entry.executionKey,
+              request: entry.prepared.request,
+              resource: entry.prepared.resource,
+            })),
+          });
+          const returned = Array.isArray(batchResult) ? batchResult : batchResult?.results;
+          if (!Array.isArray(returned)) throw new Error("query-batch-adapter-result-invalid");
+          const byKey = new Map(returned.map((entry, index) => [String(entry?.key || chunk[index]?.executionKey || ""), entry]));
+          for (const entry of chunk) {
+            const returnedEntry = byKey.get(entry.executionKey);
+            if (!returnedEntry) {
+              problemByExecution.set(entry.executionKey, toSiteAgentProblem(new Error("query-batch-adapter-result-missing")));
+            } else if (returnedEntry.status === "failed" || returnedEntry.problem) {
+              problemByExecution.set(entry.executionKey, toSiteAgentProblem(returnedEntry.problem || new Error("query-batch-adapter-failed")));
+            } else {
+              rawByExecution.set(entry.executionKey, returnedEntry.result ?? returnedEntry.data ?? returnedEntry);
+            }
           }
         }
-      };
-      await Promise.all(Array.from({ length: Math.min(concurrency, requests.length) }, worker));
+      } else {
+        const adapter = requiredAdapter(adapters.query?.execute || adapters.query, "query");
+        let cursor = 0;
+        transportCalls = executions.length;
+        const worker = async () => {
+          while (cursor < executions.length && !(request.failFast && firstFailure)) {
+            const entry = executions[cursor];
+            cursor += 1;
+            try {
+              const execution = createExecutionContext(entry.prepared.request);
+              execution.assertActive();
+              rawByExecution.set(entry.executionKey, await adapter({
+                context,
+                execution,
+                request: entry.prepared.request,
+                resource: entry.prepared.resource,
+              }));
+            } catch (error) {
+              const problem = toSiteAgentProblem(error, { correlationId: entry.prepared.request.correlationId });
+              problemByExecution.set(entry.executionKey, problem);
+              firstFailure ||= problem;
+            }
+          }
+        };
+        await Promise.all(Array.from({ length: Math.min(concurrency, executions.length) }, worker));
+      }
+
+      for (const entry of preparedEntries) {
+        const execution = executionByEntry.get(entry);
+        const problem = problemByExecution.get(execution.executionKey);
+        if (problem) {
+          results[entry.index] = Object.freeze({ key: entry.key, resourceId: entry.prepared.resource.id, status: "failed", problem });
+          firstFailure ||= problem;
+          continue;
+        }
+        try {
+          results[entry.index] = Object.freeze({
+            key: entry.key,
+            resourceId: entry.prepared.resource.id,
+            status: "succeeded",
+            result: normalizeQueryResult(currentManifest, entry.prepared, rawByExecution.get(execution.executionKey)),
+          });
+        } catch (error) {
+          const normalized = toSiteAgentProblem(error, { correlationId: entry.prepared.request.correlationId });
+          results[entry.index] = Object.freeze({ key: entry.key, resourceId: entry.prepared.resource.id, status: "failed", problem: normalized });
+          firstFailure ||= normalized;
+        }
+      }
       if (request.failFast && firstFailure) throw firstFailure;
       return Object.freeze({
         status: results.some(({ status }) => status === "failed") ? "partial" : "succeeded",
         results: Object.freeze(results.filter(Boolean)),
+        metrics: Object.freeze({
+          requested: requests.length,
+          executed: executions.length,
+          deduplicated: preparedEntries.length - executions.length,
+          transportCalls,
+          durationMs: now() - startedAt,
+        }),
       });
     },
     async subscribe(request = {}, listener) {
