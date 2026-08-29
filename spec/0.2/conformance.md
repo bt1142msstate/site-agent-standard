@@ -88,6 +88,16 @@ The CLI MUST NOT report full conformance without an executable adapter.
     completeness plus semantic provenance. Run independently sourced answer
     fixtures that gate correctness, fact/source coverage, partial disclosure,
     latency, model tool calls, internal reads, and transport calls.
+22. For difficult and compound action requests, run independently authored
+    fixtures that prove exact capability selection and order, declared
+    dependencies, permission filtering, clarification, risk-appropriate
+    confirmation, mutation count, durable idempotency, postcondition
+    verification, truthful final status, and bounded tool/transport cost.
+23. A compound workflow MUST execute as an ordered, resumable sequence. Each
+    side-effecting step MUST reauthorize and reconcile immediately before its
+    own confirmation and dispatch. A failure or cancellation MUST stop dependent
+    steps, preserve completed work, disclose partial effects, and never be
+    summarized as whole-request success. Terminal task states MUST remain stable.
 
 An exporter that claims compatibility with another protocol MUST validate its
 generated artifact against that protocol's official schema when one exists and

@@ -111,6 +111,16 @@ allowed only from a declared allowlist. A deterministic query-quality evaluator
 gates answer correctness, fact/source coverage, partial-result disclosure,
 latency, model tool calls, and host transport calls.
 
+Version `0.17.0` extends the same discipline to navigation and state-changing
+work. One permission-filtered `findCapabilities` request can discover Query,
+Navigation, and Action capabilities for several needs without exposing denied
+catalog entries. The deterministic Action quality gate measures exact ordered
+steps, dependencies, confirmation, mutation count, idempotency, verified
+postconditions, truthful partial-failure reporting, terminal-state stability,
+latency, and request cost. Compound mutations are resumable sequences: each
+side-effecting step is independently reauthorized, reconciled, confirmed, and
+verified; approval never spills into the next step.
+
 ```json
 {
   "materialization": {
@@ -265,6 +275,12 @@ const compoundCatalog = await agent.findQueryResources({ needs: [
   { key: "operations", text: "staff clocked in now" },
 ] });
 
+const workflowCatalog = await agent.findCapabilities({ needs: [
+  { key: "find", text: "find the inactive teacher" },
+  { key: "open", text: "open the exact staff record" },
+  { key: "change", text: "restore staff access" },
+] });
+
 const compound = await agent.queryBatch({
   requests: [
     { key: "policy", resourceId: "site-copy", filters: { topic: "analytics" } },
@@ -289,6 +305,16 @@ await agent.confirmAction({
 Every operation rechecks the current actor. A state-changing plan cannot be
 confirmed twice through the reference runtime, and the authoritative host
 handler remains responsible for durable idempotency and stale-state rejection.
+For a compound workflow, confirm and verify one side-effecting plan at a time;
+stop dependent work on denial, cancellation, or failure and report completed,
+pending, failed, and partially effective steps separately.
+
+```js
+import { evaluateActionQuality } from "@bt1142msstate/site-agent-standard/action-quality";
+
+const readiness = evaluateActionQuality({ cases: independentlyRecordedCases });
+if (!readiness.valid) throw new Error(readiness.errors.join("; "));
+```
 
 ## Verified navigation
 

@@ -311,6 +311,30 @@ export interface ActionPlan {
   destination?: SemanticDestination | null;
 }
 
+export interface CapabilityDiscoveryRequest {
+  text?: string;
+  needs?: Array<{ key: string; text: string }>;
+  kinds?: Array<"query" | "navigation" | "action">;
+  limit?: number;
+}
+
+export interface CapabilityDiscoveryResult {
+  needs: Array<{
+    key: string;
+    text: string;
+    capabilities: Array<{
+      kind: "query" | "navigation" | "action";
+      capabilityId: string;
+      title: string;
+      description: string;
+      score: number;
+      risk?: string;
+      confirmation?: ConfirmationKind;
+      taskSupport?: string;
+    }>;
+  }>;
+}
+
 export interface ActionConfirmationResult {
   status: ActionReconciliationStatus | "working";
   reconciliation?: "unchanged" | "rebased" | "equivalent" | "conflicting" | "missing";
@@ -388,6 +412,7 @@ export declare function createSiteAgent(options: SiteAgentOptions): {
   subscribeCapabilitySnapshots(listener: (snapshot: CapabilitySnapshot) => void | Promise<void>): Promise<{ unsubscribe(): void }>;
   subscribeCapabilities(listener: (manifest: SiteAgentManifest) => void): Promise<{ unsubscribe(): void }>;
   findQueryResources(request?: QueryDiscoveryRequest): Promise<QueryDiscoveryResult>;
+  findCapabilities(request?: CapabilityDiscoveryRequest): Promise<CapabilityDiscoveryResult>;
   query(request: QueryRequest): Promise<QueryResult>;
   queryBatch(request: QueryBatchRequest): Promise<QueryBatchResult>;
   subscribe(request: QueryRequest, listener: (event: unknown) => void): Promise<{ unsubscribe(): void }>;

@@ -25,6 +25,7 @@ export * from "./coverage.js";
 export * from "./navigation-reveal.js";
 export * from "./operability.js";
 export * from "./query-quality.js";
+export * from "./action-quality.js";
 
 function now() {
   return Date.now();
@@ -87,6 +88,41 @@ function describeQueryResource(resource, score) {
     batching: resource.batching ? Object.freeze({ ...resource.batching }) : null,
     destinationId: resource.destinationId || null,
     score,
+  });
+}
+
+function capabilitySearchScore(capability, text) {
+  const normalized = normalizeSearchText(text);
+  if (!normalized) return 1;
+  const tokens = searchTokens(normalized);
+  const haystack = normalizeSearchText([
+    capability.id,
+    capability.title,
+    capability.description,
+    ...(capability.aliases || []),
+    ...(capability.keywords || []),
+    ...(capability.examples || []),
+  ].filter(Boolean).join(" "));
+  let score = haystack.includes(normalized) ? 20 : 0;
+  for (const token of tokens) {
+    if (haystack.split(" ").includes(token)) score += 4;
+    else if (haystack.includes(token)) score += 1;
+  }
+  return score;
+}
+
+function describeCapability(kind, capability, score) {
+  return Object.freeze({
+    kind,
+    capabilityId: capability.id,
+    title: capability.title || capability.id,
+    description: capability.description,
+    score,
+    ...(kind === "action" ? {
+      risk: capability.risk,
+      confirmation: capability.confirmation,
+      taskSupport: capability.taskSupport,
+    } : {}),
   });
 }
 
@@ -425,6 +461,38 @@ export function createSiteAgent(options = {}) {
               resources: Object.freeze(rank(need.text)),
             }))),
           } : {}),
+        });
+      });
+    },
+    async findCapabilities(request = {}) {
+      return invoke("core", "capability-catalog", request, async () => {
+        const currentManifest = await getManifest();
+        const filtered = filterSiteAgentManifest(currentManifest, await getContext(), { stripExtensions: true });
+        const maximum = Math.min(Math.max(Number(request.limit || 8), 1), 50);
+        const kinds = new Set((Array.isArray(request.kinds) ? request.kinds : ["query", "navigation", "action"])
+          .filter((kind) => ["query", "navigation", "action"].includes(kind)));
+        const catalog = [
+          ...(kinds.has("query") ? filtered.queryResources.map((capability) => ({ kind: "query", capability })) : []),
+          ...(kinds.has("navigation") ? filtered.navigationDestinations.map((capability) => ({ kind: "navigation", capability })) : []),
+          ...(kinds.has("action") ? filtered.actions.map((capability) => ({ kind: "action", capability })) : []),
+        ].filter(({ capability }) => capability.status !== "sunset");
+        const rank = (text) => catalog
+          .map(({ kind, capability }) => ({ kind, capability, score: capabilitySearchScore(capability, text) }))
+          .filter(({ score }) => !String(text || "").trim() || score > 0)
+          .sort((left, right) => right.score - left.score || left.capability.id.localeCompare(right.capability.id))
+          .slice(0, maximum)
+          .map(({ kind, capability, score }) => describeCapability(kind, capability, score));
+        const needs = (Array.isArray(request.needs) ? request.needs : [{ key: "request", text: request.text || "" }])
+          .slice(0, 20)
+          .map((need, index) => ({
+            key: String(need?.key || `need-${index + 1}`).slice(0, 80),
+            text: String(need?.text || "").slice(0, 500),
+          }));
+        if (new Set(needs.map(({ key }) => key)).size !== needs.length) {
+          throw new TypeError("capability-discovery-keys-must-be-unique");
+        }
+        return Object.freeze({
+          needs: Object.freeze(needs.map((need) => Object.freeze({ ...need, capabilities: Object.freeze(rank(need.text)) }))),
         });
       });
     },
