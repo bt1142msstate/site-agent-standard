@@ -233,7 +233,21 @@ function validateManifestInternal(manifest, options = {}) {
     queryIds.add(resource.id);
     if (!new Set(["local", "host"]).has(resource.execution)) errors.push(`${path}.execution must be local or host.`);
     if (!Array.isArray(resource.modes) || !resource.modes.length) errors.push(`${path}.modes must not be empty.`);
+    const declaredModes = new Set(resource.modes || []);
+    for (const [coverageIndex, coverage] of (resource.modeCoverage || []).entries()) {
+      if (!declaredModes.has(coverage?.mode)) errors.push(`${path}.modeCoverage[${coverageIndex}].mode is not declared.`);
+      for (const coveredMode of coverage?.covers || []) {
+        if (!declaredModes.has(coveredMode)) errors.push(`${path}.modeCoverage[${coverageIndex}].covers references undeclared mode ${coveredMode}.`);
+      }
+    }
     if (!isObject(resource.filters)) errors.push(`${path}.filters must be an object of semantic filter schemas.`);
+    const selectableFields = new Set(resource.selectableFields || []);
+    for (const field of resource.defaultFields || []) {
+      if (!selectableFields.has(field)) errors.push(`${path}.defaultFields references non-selectable field ${field}.`);
+    }
+    if (resource.batching?.consistency === "snapshot" && resource.freshness?.mode === "live") {
+      errors.push(`${path}.batching cannot claim snapshot consistency for a live resource.`);
+    }
     for (const field of ["aliases", "keywords", "examples"]) {
       if (resource[field] !== undefined && (!Array.isArray(resource[field])
         || resource[field].some((value) => !String(value || "").trim())

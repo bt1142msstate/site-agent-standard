@@ -170,6 +170,19 @@ export async function runSiteAgentConformance(options = {}) {
           if (!String(error?.message).includes("schema-invalid")) throw error;
         });
     });
+
+    await runProof(proofs, "query.batch-efficiency-and-evidence", "query", async () => {
+      const testCase = requireCase(cases, "queryBatch");
+      const result = await agent.queryBatch(testCase.request);
+      if (!result.metrics || result.metrics.requested < 2) throw new Error("query-batch-metrics-required");
+      if (result.metrics.executed >= result.metrics.requested) throw new Error("query-batch-deduplication-not-proven");
+      if (result.results.some((entry) => entry.status !== "succeeded"
+        || entry.result.evidence?.completeness === "unknown"
+        || !entry.result.evidence?.provenance?.length)) {
+        throw new Error("query-batch-evidence-not-proven");
+      }
+      if (typeof testCase.verify === "function") await testCase.verify(result);
+    });
   }
 
   if (declared.profiles.navigation) {

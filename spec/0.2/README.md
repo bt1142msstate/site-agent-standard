@@ -117,6 +117,36 @@ Bindings MAY broker a large catalog behind a discovery tool and a generic read
 tool. Brokerage changes tool exposure only; it does not weaken resource IDs,
 schemas, limits, provenance, authorization, or freshness semantics.
 
+### Compound Query efficiency and evidence
+
+A discovery operation MAY accept several keyed information needs and MUST rank
+each need only against the active caller-authorized catalog. A brokered read
+SHOULD accept a bounded keyed request array so a model can obtain independent
+frontend, backend, and document evidence in one tool call. The host still
+reauthorizes and validates every child request.
+
+Batch execution MUST preserve caller order and keys, report child failures, and
+publish privacy-safe metrics for requested, executed, deduplicated, and host
+transport calls. Exact duplicate requests MUST execute once. A broader mode MAY
+satisfy another mode only when the Query resource declares that relationship in
+`modeCoverage`; a runtime MUST NOT infer coverage from field names or sample
+results. An optional host `executeBatch` adapter carries the validated unique
+requests in one transport. Snapshot consistency may be claimed only when every
+resource belongs to one declared snapshot-capable batch group.
+
+Sparse result selection is opt-in: a model may request only fields in
+`selectableFields`, and omitted selection uses `defaultFields`. Selection never
+grants field authority or weakens result-schema validation.
+
+Every normalized result MUST state completeness as `complete`, `partial`, or
+`unknown`, list material limitations, and carry at least its semantic resource
+ID plus available `asOf` and revision provenance. Pagination, truncation, or a
+source-declared partial result forces partial status. Models MUST disclose
+partial evidence and MUST NOT turn unavailable or unknown evidence into zero.
+Quality gates SHOULD use independently reviewed expected facts and sources to
+measure exact answer accuracy, evidence coverage, latency, model tool calls,
+internal reads, deduplication, and host transport calls.
+
 ## Operability evidence
 
 An Operability claim requires an independent inventory digest, every active
