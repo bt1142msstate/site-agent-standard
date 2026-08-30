@@ -40,6 +40,10 @@ function completeEvidence(value) {
     emptyState: true,
     errorState: true,
     provenanceVerified: true,
+    resultIdentityVerified: true,
+    resultDestinationExact: true,
+    destinationStateVerified: true,
+    destinationReady: true,
     durationMs: 80,
     violations: [],
   }));
@@ -94,4 +98,14 @@ test("operability evidence cannot be presented as a WCAG conformance claim", () 
     validateSiteOperabilityEvidence(value, evidence).errors.join("\n"),
     /operability-must-not-claim-wcag-conformance/,
   );
+});
+
+test("operability fails when query facts cannot open an identifiable ready record", () => {
+  const value = manifest();
+  const evidence = completeEvidence(value);
+  evidence.queries[0].resultIdentityVerified = false;
+  evidence.queries[0].destinationReady = false;
+  const result = validateSiteOperabilityEvidence(value, evidence);
+  assert.equal(result.valid, false);
+  assert.match(result.errors.join("\n"), /operability-query-failed/);
 });

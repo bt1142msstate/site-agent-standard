@@ -7,6 +7,10 @@ export interface QueryQualityCase {
   returnedSources: string[];
   completeness: "complete" | "partial" | "unknown";
   partialDisclosed?: boolean;
+  resultIdentityVerified: boolean;
+  resultDestinationExact: boolean;
+  destinationStateVerified: boolean;
+  destinationReady: boolean;
   toolCalls: number;
   transportCalls: number;
   internalRequests: number;

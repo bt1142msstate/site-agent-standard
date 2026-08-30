@@ -46,6 +46,10 @@ function queryPasses(run, budget) {
     && run?.emptyState === true
     && run?.errorState === true
     && run?.provenanceVerified === true
+    && run?.resultIdentityVerified === true
+    && run?.resultDestinationExact === true
+    && run?.destinationStateVerified === true
+    && run?.destinationReady === true
     && numeric(run?.durationMs)
     && Number(run.durationMs) <= budget
     && (!Array.isArray(run.violations) || run.violations.length === 0);

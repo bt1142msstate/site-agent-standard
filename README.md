@@ -132,6 +132,12 @@ semantic adapters remain visible as unresolved gaps. Complete claims require a
 rendered-state crawl at desktop and mobile-touch; static source inventories are
 accepted only as partial evidence.
 
+Version `0.20.0` closes the gap between Query and Navigation coverage. Query
+quality and operability evidence must prove that returned facts identify the
+real user-facing entity, resolve an exact result destination, apply the
+requested destination state, and wait until asynchronous data is ready. A
+query and a separately reachable page no longer count as an end-to-end success.
+
 ```json
 {
   "materialization": {

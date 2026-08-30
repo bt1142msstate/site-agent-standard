@@ -61,7 +61,9 @@ The optional Operability profile fails closed unless evidence includes:
 - exact state, visibility, keyboard reachability, visible/unobscured focus,
   no keyboard trap, reveal depth, and a time budget;
 - every active query resource with allowed, denied, filter, result-schema,
-  bounded, empty, error, provenance, and time-budget cases;
+  bounded, empty, error, provenance, human-recognizable result identity, exact
+  result destination, requested-state, asynchronous-readiness, and time-budget
+  cases;
 - automated and manual or hybrid evidence for keyboard operation, keyboard
   traps, focus order, focus visibility, focus obscuring, name/role/value,
   reflow, target size, status messages, and error identification; and

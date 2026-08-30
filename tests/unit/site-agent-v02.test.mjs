@@ -419,6 +419,10 @@ test("query quality gates answer accuracy, evidence coverage, disclosure, and re
     requiredSources: ["static-site-content", "open-shifts"],
     returnedSources: ["static-site-content", "open-shifts"],
     completeness: "complete",
+    resultIdentityVerified: true,
+    resultDestinationExact: true,
+    destinationStateVerified: true,
+    destinationReady: true,
     toolCalls: 1,
     transportCalls: 1,
     internalRequests: 2,
@@ -437,6 +441,10 @@ test("query quality gates answer accuracy, evidence coverage, disclosure, and re
     returnedSources: ["a"],
     completeness: "partial",
     partialDisclosed: false,
+    resultIdentityVerified: false,
+    resultDestinationExact: false,
+    destinationStateVerified: false,
+    destinationReady: false,
     toolCalls: 2,
     transportCalls: 2,
     internalRequests: 2,
@@ -447,6 +455,8 @@ test("query quality gates answer accuracy, evidence coverage, disclosure, and re
   assert.match(failing.errors.join("\n"), /answer-incorrect/);
   assert.match(failing.errors.join("\n"), /partial-not-disclosed/);
   assert.match(failing.errors.join("\n"), /transport-call-budget-exceeded/);
+  assert.match(failing.errors.join("\n"), /result-identity-unverified/);
+  assert.match(failing.errors.join("\n"), /destination-not-ready/);
 });
 
 test("nested reveal orchestration verifies every semantic layer in order and waits for virtualization", async () => {

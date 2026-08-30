@@ -45,6 +45,10 @@ export function evaluateQueryQuality(evidence = {}, budgets = {}) {
     if (testCase?.completeness === "partial" && testCase?.partialDisclosed !== true) {
       errors.push(`query-quality-partial-not-disclosed:${id}`);
     }
+    if (testCase?.resultIdentityVerified !== true) errors.push(`query-quality-result-identity-unverified:${id}`);
+    if (testCase?.resultDestinationExact !== true) errors.push(`query-quality-result-destination-inexact:${id}`);
+    if (testCase?.destinationStateVerified !== true) errors.push(`query-quality-destination-state-unverified:${id}`);
+    if (testCase?.destinationReady !== true) errors.push(`query-quality-destination-not-ready:${id}`);
     for (const field of ["toolCalls", "transportCalls", "internalRequests", "deduplicatedRequests", "durationMs"]) {
       if (!finiteNonNegative(testCase?.[field])) errors.push(`query-quality-${field}-invalid:${id}`);
     }
